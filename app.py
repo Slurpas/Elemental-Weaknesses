@@ -101,20 +101,13 @@ def get_pvp_moves_for_pokemon(name):
         (row['charged_move_2'], 'charged')
     ]:
         if move_name and move_name.lower() != 'none':
-            # Use poke_data to get move type
+            # Get move type from moves.json
             move_id = move_name.upper().replace(' ', '_')
-            move_type = None
-            for p in poke_data.pokemon:
-                if move_id in p.get('fastMoves', []) or move_id in p.get('chargedMoves', []):
-                    for t in p.get('types', []):
-                        if t and t != 'none':
-                            move_type = t
-                            break
-                if move_type:
-                    break
+            move_details = poke_data.get_move_details(move_id)
+            move_type = move_details.get('type', '') if move_details else ''
             moves.append({
                 'name': move_name,
-                'type': move_type or '',
+                'type': move_type,
                 'move_class': move_class
             })
     return moves
