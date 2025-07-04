@@ -12,8 +12,13 @@ MOVES_PATH = os.path.join(
     os.path.dirname(__file__), 'pvpoke', 'src', 'data', 'gamemaster', 'moves.json'
 )
 
+# Path to the PvPoke Great League rank 1 stats file
+RANK1_PATH = os.path.join(
+    os.path.dirname(__file__), 'pvpoke', 'src', 'data', 'rankings', 'all', 'overall', 'rankings-1500.json'
+)
+
 class PokeData:
-    def __init__(self, gamemaster_path: str = GAMEMASTER_PATH, moves_path: str = MOVES_PATH):
+    def __init__(self, gamemaster_path: str = GAMEMASTER_PATH, moves_path: str = MOVES_PATH, rank1_path: str = RANK1_PATH):
         with open(gamemaster_path, encoding='utf-8') as f:
             data = json.load(f)
         # Find the list of Pokémon entries (skip settings/cups)
@@ -25,6 +30,11 @@ class PokeData:
         
         # Create move lookup by ID
         self.moves_by_id = {move['moveId']: move for move in self.moves}
+
+        # Load rank 1 stats
+        self.rank1_stats = self._load_rank1_stats(rank1_path)
+        # Load level and IVs for cp1500 from gamemaster.json
+        self.rank1_ivs = self._extract_rank1_ivs_from_gamemaster(self.pokemon)
 
     def _extract_pokemon_list(self, data: Dict[str, Any]) -> List[Dict[str, Any]]:
         # The Pokémon entries are after the initial settings/cups, as a list
@@ -130,6 +140,64 @@ class PokeData:
             'fast_moves': fast_moves,
             'charged_moves': charged_moves
         }
+
+    def _load_rank1_stats(self, path: str) -> Dict[str, Any]:
+        """Load PvPoke rank 1 stats for Great League from rankings-1500.json"""
+        if not os.path.exists(path):
+            return {}
+        with open(path, encoding='utf-8') as f:
+            data = json.load(f)
+        stats = {}
+        for entry in data:
+            sid = entry.get('speciesId')
+            s = entry.get('stats', {})
+            # Optionally get IVs if present
+            ivs = entry.get('ivs', {}) if 'ivs' in entry else {
+                'atk': entry.get('iv_atk', None),
+                'def': entry.get('iv_def', None),
+                'sta': entry.get('iv_sta', None)
+            }
+            stats[sid] = {
+                'atk': s.get('atk'),
+                'def': s.get('def'),
+                'hp': s.get('hp'),
+                'product': s.get('product'),
+                'ivs': ivs
+            }
+        return stats
+
+    def _extract_rank1_ivs_from_gamemaster(self, pokemon_list):
+        """Extract level and IVs for cp1500 from defaultIVs for each Pokémon."""
+        stats = {}
+        for p in pokemon_list:
+            sid = p.get('speciesId')
+            default_ivs = p.get('defaultIVs', {})
+            cp1500 = default_ivs.get('cp1500')
+            if cp1500 and len(cp1500) == 4:
+                stats[sid] = {
+                    'level': cp1500[0],
+                    'iv_atk': cp1500[1],
+                    'iv_def': cp1500[2],
+                    'iv_sta': cp1500[3]
+                }
+        return stats
+
+    def get_rank1_stats(self, species_id: str) -> Optional[Dict[str, Any]]:
+        """Get PvPoke rank 1 stats for a given speciesId (Great League), including IVs and level if available."""
+        sid = species_id.lower()
+        stats = self.rank1_stats.get(sid)
+        ivs = self.rank1_ivs.get(sid)
+        if stats:
+            if ivs:
+                stats = stats.copy()
+                stats['level'] = ivs['level']
+                stats['iv_atk'] = ivs['iv_atk']
+                stats['iv_def'] = ivs['iv_def']
+                stats['iv_sta'] = ivs['iv_sta']
+            return stats
+        elif ivs:
+            return ivs
+        return None
 
 # Example usage:
 if __name__ == '__main__':

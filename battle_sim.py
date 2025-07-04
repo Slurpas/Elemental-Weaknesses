@@ -60,82 +60,85 @@ class TypeChart:
 
 class BattlePokemon:
     """Represents a Pokémon in battle with current state"""
-    def __init__(self, pokemon_data: Dict[str, Any], moves: Dict[str, str], shields: int = 2):
+    def __init__(self, pokemon_data: Dict[str, Any], moves: Dict[str, str], shields: int = 2, poke_data: PokeData = None):
         self.data = pokemon_data
         self.moves = moves
         self.shields = shields
-        
+        self.poke_data = poke_data or PokeData()
+
+        # Use PvPoke rank 1 stats if available
+        self.species_id = self.data.get('speciesId') or self.data.get('name', '').lower().replace(' ', '_')
+        self.rank1_stats = self.poke_data.get_rank1_stats(self.species_id)
+        if self.rank1_stats:
+            self.atk = self.rank1_stats['atk']
+            self.defense = self.rank1_stats['def']
+            self.hp = self.rank1_stats['hp']
+            self.max_hp = self.hp
+            self.ivs = self.rank1_stats.get('ivs', {})
+            self.stat_product = self.rank1_stats.get('product')
+            self.level = self.rank1_stats.get('level')
+            self.iv_atk = self.rank1_stats.get('iv_atk')
+            self.iv_def = self.rank1_stats.get('iv_def')
+            self.iv_sta = self.rank1_stats.get('iv_sta')
+            print(f"[DEBUG] Using PvPoke rank 1 stats for {self.species_id}: ATK={self.atk}, DEF={self.defense}, HP={self.hp}, Level={self.level}, IVs=({self.iv_atk}/{self.iv_def}/{self.iv_sta}), Stat Product={self.stat_product}")
+        else:
+            # Fallback to old calculation
+            base_stats = self.data.get("baseStats", {})
+            hp_base = base_stats.get("hp", 100)
+            atk_base = base_stats.get("atk", 100)
+            defense_base = base_stats.get("def", 100)
+            hp_iv = atk_iv = defense_iv = 15
+            level = 40
+            self.atk = (atk_base + atk_iv) * (0.5 + level * 0.01)
+            self.defense = (defense_base + defense_iv) * (0.5 + level * 0.01)
+            self.hp = int((hp_base + hp_iv) * (0.5 + level * 0.01))
+            self.max_hp = self.hp
+            self.ivs = {'atk': atk_iv, 'def': defense_iv, 'sta': hp_iv}
+            self.stat_product = self.atk * self.defense * self.hp
+            self.level = level
+            self.iv_atk = atk_iv
+            self.iv_def = defense_iv
+            self.iv_sta = hp_iv
+            print(f"[DEBUG] Using fallback stats for {self.species_id}: ATK={self.atk}, DEF={self.defense}, HP={self.hp}, Level={self.level}, IVs=({self.iv_atk}/{self.iv_def}/{self.iv_sta}), Stat Product={self.stat_product}")
+
         # Battle state
-        self.hp = self._calculate_hp()
-        self.max_hp = self.hp
         self.energy = 0
         self.max_energy = 100
-        
         # Stats with buffs/debuffs
         self.atk_buffs = 0  # -4 to +4
         self.def_buffs = 0  # -4 to +4
-        
         # Shadow multipliers
         self.shadow_atk_mult = 1.0
         self.shadow_def_mult = 1.0
         if "shadow" in pokemon_data.get("tags", []):
             self.shadow_atk_mult = DamageMultiplier.SHADOW_ATK
             self.shadow_def_mult = DamageMultiplier.SHADOW_DEF
-        
         # Move objects
         self.fast_move = None
         self.charged_moves = []
         self._initialize_moves()
     
-    def _calculate_hp(self) -> int:
-        """Calculate HP from base stats and IVs"""
-        base_stats = self.data.get("baseStats", {})
-        hp_base = base_stats.get("hp", 100)
-        # For now, use default IVs (15/15/15)
-        hp_iv = 15
-        level = 40  # Default level
-        return int((hp_base + hp_iv) * (0.5 + level * 0.01))
-    
     def _initialize_moves(self):
         """Initialize move objects from move IDs"""
-        from poke_data import PokeData
-        poke_data = PokeData()
-        
         if "fast" in self.moves:
-            self.fast_move = poke_data.get_move_details(self.moves["fast"])
+            self.fast_move = self.poke_data.get_move_details(self.moves["fast"])
         
         for i in range(1, 3):
             key = f"charged{i}"
             if key in self.moves:
-                move_data = poke_data.get_move_details(self.moves[key])
+                move_data = self.poke_data.get_move_details(self.moves[key])
                 if move_data:
                     self.charged_moves.append(move_data)
     
     def get_effective_atk(self) -> float:
         """Get effective attack stat with buffs and shadow multiplier"""
-        base_stats = self.data.get("baseStats", {})
-        atk_base = base_stats.get("atk", 100)
-        atk_iv = 15  # Default IV
-        level = 40  # Default level
-        base_atk = (atk_base + atk_iv) * (0.5 + level * 0.01)
-        
-        # Apply buff multiplier
         buff_mult = self._get_buff_multiplier(self.atk_buffs)
-        
-        return base_atk * self.shadow_atk_mult * buff_mult
+        return self.atk * self.shadow_atk_mult * buff_mult
     
     def get_effective_def(self) -> float:
         """Get effective defense stat with buffs and shadow multiplier"""
-        base_stats = self.data.get("baseStats", {})
-        def_base = base_stats.get("def", 100)
-        def_iv = 15  # Default IV
-        level = 40  # Default level
-        base_def = (def_base + def_iv) * (0.5 + level * 0.01)
-        
-        # Apply buff multiplier
         buff_mult = self._get_buff_multiplier(self.def_buffs)
-        
-        return base_def * self.shadow_def_mult * buff_mult
+        return self.defense * self.shadow_def_mult * buff_mult
     
     def _get_buff_multiplier(self, buff_stage: int) -> float:
         """Get stat multiplier from buff stage (-4 to +4)"""
@@ -196,9 +199,9 @@ class BattleSimulator:
         Returns:
             Detailed battle result with winner, timeline, stats, etc.
         """
-        # Initialize battle Pokémon
-        p1 = BattlePokemon(p1_data, p1_moves, p1_shields)
-        p2 = BattlePokemon(p2_data, p2_moves, p2_shields)
+        # Initialize battle Pokémon with poke_data for rank 1 stats
+        p1 = BattlePokemon(p1_data, p1_moves, p1_shields, poke_data=self.poke_data)
+        p2 = BattlePokemon(p2_data, p2_moves, p2_shields, poke_data=self.poke_data)
         
         # Battle state
         turn = 0
