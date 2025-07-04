@@ -1,0 +1,89 @@
+# Pokemon PvP Analyzer
+
+A web application to quickly look up Pokemon weaknesses, resistances, and moves for PvP battles in Pokemon Go.
+
+## Features
+
+- **Search Pokemon**: Type any Pokemon name to get instant results
+- **Type Effectiveness**: View weaknesses (2x damage), resistances (0.5x damage), and immunities (0x damage)
+- **Move Information**: See common moves with their type, power, accuracy, and PP
+- **Mobile-Friendly**: Responsive design that works great on phones during battles
+- **Fast Loading**: Cached data for quick access to frequently searched Pokemon
+
+## Setup Instructions
+
+### Prerequisites
+- Python 3.7 or higher
+- pip (Python package installer)
+
+### Installation
+
+1. **Clone or download this project** to your local machine
+
+2. **Install Python dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. **Run the application**:
+   ```bash
+   python app.py
+   ```
+
+4. **Open your browser** and go to:
+   ```
+   http://localhost:5000
+   ```
+
+## Usage
+
+1. **Search for a Pokemon**: Type the name of any Pokemon in the search box
+2. **View Results**: The app will show:
+   - Pokemon sprite and basic info
+   - Type weaknesses, resistances, and immunities
+   - Common moves with details
+3. **Switch Tabs**: Use the "Weaknesses" and "Moves" tabs to view different information
+
+## Technical Details
+
+- **Backend**: Python Flask web framework
+- **Frontend**: HTML5, CSS3, Vanilla JavaScript
+- **Data Source**: PokeAPI (free Pokemon database)
+- **Caching**: Built-in caching to reduce API calls and improve performance
+
+## File Structure
+
+```
+Pokemon PvP Analyzer/
+├── app.py                 # Main Flask application
+├── requirements.txt       # Python dependencies
+├── README.md             # This file
+├── templates/
+│   └── index.html        # Main webpage template
+└── static/
+    ├── styles.css        # CSS styles
+    └── script.js         # Frontend JavaScript
+```
+
+## API Endpoints
+
+- `GET /` - Main webpage
+- `GET /api/pokemon/<name>` - Get Pokemon data by name
+- `GET /api/search/<query>` - Search Pokemon by partial name
+
+## Customization
+
+You can easily customize the app by:
+- Modifying `static/styles.css` to change the appearance
+- Updating `static/script.js` to add new features
+- Editing `app.py` to modify the backend logic
+
+## Troubleshooting
+
+- **Port already in use**: Change the port in `app.py` (line with `app.run()`)
+- **API errors**: The app uses the free PokeAPI, which may have rate limits
+- **Slow loading**: The app caches data, so subsequent searches will be faster
+
+## License
+
+This project is open source and available under the MIT License. 

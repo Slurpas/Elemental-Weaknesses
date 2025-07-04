@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pokemon PvP Analyzer</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Pokemon PvP Analyzer</h1>
+            <p>Get weaknesses, resistances, moves, and battle simulations for any Pokemon</p>
+        </header>
+
+        <div class="main-content">
+            <div class="left-panel">
+                <div class="search-section">
+                    <div class="search-container">
+                        <input type="text" id="pokemonSearch" placeholder="Enter Pokemon name..." autocomplete="off">
+                        <button id="searchBtn">Search</button>
+                    </div>
+                    <div id="searchResults" class="search-results"></div>
+                </div>
+
+                <div id="pokemonInfo" class="pokemon-info hidden">
+                    <div class="pokemon-header">
+                        <img id="pokemonSprite" src="" alt="Pokemon sprite">
+                        <div class="pokemon-details">
+                            <h2 id="pokemonName"></h2>
+                            <div id="pokemonTypes" class="types"></div>
+                            <div class="stats">
+                                <span id="pokemonHP">HP: --</span>
+                                <span id="pokemonAttack">ATK: --</span>
+                                <span id="pokemonDefense">DEF: --</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="info-tabs">
+                        <button class="tab-btn active" data-tab="weaknesses">Weaknesses</button>
+                        <button class="tab-btn" data-tab="battle">Battle Simulator</button>
+                    </div>
+
+                    <div class="tab-content">
+                        <div id="weaknesses" class="tab-pane active">
+                            <div class="effectiveness-grid">
+                                <div class="effectiveness-category">
+                                    <h3>Weaknesses</h3>
+                                    <div id="weaknessesList" class="type-list"></div>
+                                </div>
+                                <div class="effectiveness-category">
+                                    <h3>Resistances</h3>
+                                    <div id="resistancesList" class="type-list"></div>
+                                </div>
+                                <div class="effectiveness-category">
+                                    <h3>Immunities</h3>
+                                    <div id="immunitiesList" class="type-list"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="battle" class="tab-pane">
+                            <div class="battle-simulator">
+                                <div class="battle-setup">
+                                    <h3>Battle Setup</h3>
+                                    
+                                    <!-- Pokémon Selection -->
+                                    <div class="battle-pokemon-selection">
+                                        <div class="pokemon-selector">
+                                            <h4>Pokémon 1</h4>
+                                            <div class="pokemon-selector-content">
+                                                <div class="pokemon-display" id="pokemon1Display">
+                                                    <div class="pokemon-placeholder">
+                                                        <span class="plus-icon">+</span>
+                                                        <span>Select Pokémon</span>
+                                                    </div>
+                                                </div>
+                                                <div class="moves-selection" id="pokemon1Moves" style="display: none;">
+                                                    <div class="move-selector">
+                                                        <label>Fast Move:</label>
+                                                        <select id="pokemon1FastMove" class="move-select"></select>
+                                                    </div>
+                                                    <div class="move-selector">
+                                                        <label>Charged Move 1:</label>
+                                                        <select id="pokemon1Charged1" class="move-select"></select>
+                                                    </div>
+                                                    <div class="move-selector">
+                                                        <label>Charged Move 2:</label>
+                                                        <select id="pokemon1Charged2" class="move-select"></select>
+                                                    </div>
+                                                    <div class="shield-selector">
+                                                        <label>Shields:</label>
+                                                        <select id="pokemon1Shields" class="shield-select">
+                                                            <option value="0">0</option>
+                                                            <option value="1">1</option>
+                                                            <option value="2" selected>2</option>
+                                                        </select>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="vs-indicator">VS</div>
+
+                                        <div class="pokemon-selector">
+                                            <h4>Pokémon 2</h4>
+                                            <div class="pokemon-selector-content">
+                                                <div class="pokemon-display" id="pokemon2Display">
+                                                    <div class="pokemon-placeholder">
+                                                        <span class="plus-icon">+</span>
+                                                        <span>Select Pokémon</span>
+                                                    </div>
+                                                </div>
+                                                <div class="moves-selection" id="pokemon2Moves" style="display: none;">
+                                                    <div class="move-selector">
+                                                        <label>Fast Move:</label>
+                                                        <select id="pokemon2FastMove" class="move-select"></select>
+                                                    </div>
+                                                    <div class="move-selector">
+                                                        <label>Charged Move 1:</label>
+                                                        <select id="pokemon2Charged1" class="move-select"></select>
+                                                    </div>
+                                                    <div class="move-selector">
+                                                        <label>Charged Move 2:</label>
+                                                        <select id="pokemon2Charged2" class="move-select"></select>
+                                                    </div>
+                                                    <div class="shield-selector">
+                                                        <label>Shields:</label>
+                                                        <select id="pokemon2Shields" class="shield-select">
+                                                            <option value="0">0</option>
+                                                            <option value="1">1</option>
+                                                            <option value="2" selected>2</option>
+                                                        </select>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <button id="runBattleBtn" class="battle-btn" disabled>Run Battle</button>
+                                </div>
+
+                                <!-- Battle Results -->
+                                <div id="battleResults" class="battle-results hidden">
+                                    <h3>Battle Results</h3>
+                                    <div class="battle-summary">
+                                        <div class="winner-display">
+                                            <span id="winnerName"></span> wins!
+                                        </div>
+                                        <div class="battle-stats">
+                                            <div class="stat">
+                                                <span class="stat-label">Turns:</span>
+                                                <span id="battleTurns"></span>
+                                            </div>
+                                            <div class="stat">
+                                                <span class="stat-label">Battle Rating:</span>
+                                                <span id="battleRating"></span>
+                                            </div>
+                                        </div>
+                                        <div class="final-hp">
+                                            <div class="hp-display">
+                                                <span id="pokemon1FinalHP"></span> HP remaining
+                                            </div>
+                                            <div class="hp-display">
+                                                <span id="pokemon2FinalHP"></span> HP remaining
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Battle Timeline -->
+                                    <div class="battle-timeline">
+                                        <h4>Battle Timeline</h4>
+                                        <div id="timelineContainer" class="timeline-container">
+                                            <!-- Timeline entries will be populated here -->
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="right-panel">
+                <div class="team-section">
+                    <h3>Your Team</h3>
+                    <div class="team-slots">
+                        <div class="team-slot" data-slot="1">
+                            <div class="slot-content">
+                                <div class="add-pokemon">
+                                    <span class="plus-icon">+</span>
+                                    <span class="add-text">Add Pokemon</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="team-slot" data-slot="2">
+                            <div class="slot-content">
+                                <div class="add-pokemon">
+                                    <span class="plus-icon">+</span>
+                                    <span class="add-text">Add Pokemon</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="team-slot" data-slot="3">
+                            <div class="slot-content">
+                                <div class="add-pokemon">
+                                    <span class="plus-icon">+</span>
+                                    <span class="add-text">Add Pokemon</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="team-analysis hidden" id="teamAnalysis">
+                    <h3>Team Analysis</h3>
+                    <div class="analysis-content">
+                        <div class="coverage-section">
+                            <h4>Type Coverage</h4>
+                            <div id="teamCoverage" class="coverage-grid"></div>
+                        </div>
+                        <div class="matchup-section">
+                            <h4>vs Current Pokemon</h4>
+                            <div id="teamMatchups" class="matchup-list"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="loading" class="loading hidden">
+            <div class="spinner"></div>
+            <p>Loading Pokemon data...</p>
+        </div>
+
+        <div id="error" class="error hidden">
+            <p>Pokemon not found. Please try again.</p>
+        </div>
+
+        <div id="teamModal" class="modal hidden">
+            <div class="modal-content">
+                <button class="modal-close" id="closeTeamModal">×</button>
+                <h2>Select a Pokemon</h2>
+                <input type="text" id="teamModalSearch" placeholder="Search Pokemon..." autocomplete="off">
+                <div id="teamModalResults" class="modal-results"></div>
+            </div>
+        </div>
+
+        <!-- Battle Pokémon Selection Modal -->
+        <div id="battleModal" class="modal hidden">
+            <div class="modal-content">
+                <button class="modal-close" id="closeBattleModal">×</button>
+                <h2>Select a Pokemon for Battle</h2>
+                <input type="text" id="battleModalSearch" placeholder="Search Pokemon..." autocomplete="off">
+                <div id="battleModalResults" class="modal-results"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html> 
