@@ -468,9 +468,9 @@ def api_battle():
         p2_available_moves = poke_data.get_pokemon_moves(p2_id)
         
         # Check if selected moves are valid
-        if not self._validate_moveset(p1_moves, p1_available_moves):
+        if not _validate_moveset(p1_moves, p1_available_moves):
             return jsonify({'error': f'Invalid moveset for {p1_id}'}), 400
-        if not self._validate_moveset(p2_moves, p2_available_moves):
+        if not _validate_moveset(p2_moves, p2_available_moves):
             return jsonify({'error': f'Invalid moveset for {p2_id}'}), 400
         
         # Run battle simulation
@@ -495,7 +495,7 @@ def api_battle():
     except Exception as e:
         return jsonify({'error': f'Battle simulation failed: {str(e)}'}), 500
 
-def _validate_moveset(self, moveset: Dict[str, str], available_moves: Dict[str, Any]) -> bool:
+def _validate_moveset(moveset, available_moves):
     """Validate that a moveset only uses available moves"""
     if 'fast' not in moveset:
         return False
