@@ -302,6 +302,7 @@ async function addPokemonToTeam(pokemonName, slotNumber) {
         const teamMember = {
             slot: slotNumber,
             name: data.name,
+            speciesId: data.speciesId || data.name.toLowerCase().replace(' ', '_'),
             sprite: data.sprite,
             types: data.types,
             effectiveness: data.effectiveness,
@@ -372,6 +373,90 @@ function updateTeamSlot(slotNumber, pokemon, movesEffectiveness = null, isBestCo
             </div>
         `;
     }
+
+    // Generate battle result HTML if opponent is selected
+    let battleResultHTML = '';
+    if (currentOpponent) {
+        // Find battle result for this team member
+        const battleResult = window.currentBattleResults ? 
+            window.currentBattleResults.find(result => result.teamPokemon.name === pokemon.name) : null;
+        
+        if (battleResult) {
+            const winner = battleResult.battleResult.winner;
+            const battleRating = battleResult.battleResult.battle_rating;
+            const teamHpRemaining = battleResult.battleResult.p1_final_hp;
+            const opponentHpRemaining = battleResult.battleResult.p2_final_hp;
+            
+            // Determine what to display based on winner and HP
+            let ratingDisplay, winnerText, winnerClass, ratingColor;
+            
+            // Check if it's actually a tie (both Pokémon have 0 HP)
+            const isActualTie = teamHpRemaining === 0 && opponentHpRemaining === 0;
+            
+            if (isActualTie) {
+                // True tie - both fainted
+                ratingDisplay = 'Tie';
+                winnerText = 'Tie';
+                winnerClass = 'tie';
+                ratingColor = 'neutral';
+            } else if (teamHpRemaining > 0 && opponentHpRemaining === 0) {
+                // Your Pokémon won - opponent fainted
+                const hpPercent = Math.round((teamHpRemaining / pokemon.stats.hp) * 100);
+                ratingDisplay = `${hpPercent}% HP`;
+                winnerText = 'Wins';
+                winnerClass = 'wins';
+                ratingColor = hpPercent > 50 ? 'excellent' : hpPercent > 25 ? 'good' : 'close';
+            } else if (opponentHpRemaining > 0 && teamHpRemaining === 0) {
+                // Opponent won - your Pokémon fainted
+                const hpPercent = Math.round((opponentHpRemaining / currentOpponent.stats.hp) * 100);
+                ratingDisplay = `${hpPercent}% HP`;
+                winnerText = 'Loses';
+                winnerClass = 'loses';
+                ratingColor = hpPercent > 50 ? 'bad' : hpPercent > 25 ? 'close-loss' : 'close';
+            } else if (teamHpRemaining > opponentHpRemaining) {
+                // Your Pokémon won with more HP remaining
+                const hpPercent = Math.round((teamHpRemaining / pokemon.stats.hp) * 100);
+                ratingDisplay = `${hpPercent}% HP`;
+                winnerText = 'Wins';
+                winnerClass = 'wins';
+                ratingColor = hpPercent > 50 ? 'excellent' : hpPercent > 25 ? 'good' : 'close';
+            } else if (opponentHpRemaining > teamHpRemaining) {
+                // Opponent won with more HP remaining
+                const hpPercent = Math.round((opponentHpRemaining / currentOpponent.stats.hp) * 100);
+                ratingDisplay = `${hpPercent}% HP`;
+                winnerText = 'Loses';
+                winnerClass = 'loses';
+                ratingColor = hpPercent > 50 ? 'bad' : hpPercent > 25 ? 'close-loss' : 'close';
+            } else {
+                // Equal HP remaining (very rare)
+                const hpPercent = Math.round((teamHpRemaining / pokemon.stats.hp) * 100);
+                ratingDisplay = `${hpPercent}% HP`;
+                winnerText = 'Tie';
+                winnerClass = 'tie';
+                ratingColor = 'neutral';
+            }
+
+            battleResultHTML = `
+                <div class="team-battle-result">
+                    <h4>vs ${currentOpponent.name}</h4>
+                    <div class="battle-result-display">
+                        <div class="rating-value rating-${ratingColor}">${ratingDisplay}</div>
+                        <div class="winner-indicator ${winnerClass}">${winnerText}</div>
+                        <div class="hp-details">You: ${teamHpRemaining} HP | Opponent: ${opponentHpRemaining} HP</div>
+                    </div>
+                </div>
+            `;
+        } else {
+            battleResultHTML = `
+                <div class="team-battle-result">
+                    <h4>vs ${currentOpponent.name}</h4>
+                    <div class="battle-result-display">
+                        <div class="no-battle-data">No battle data</div>
+                    </div>
+                </div>
+            `;
+        }
+    }
     
     slot.innerHTML = `
         <div class="slot-content">
@@ -385,6 +470,7 @@ function updateTeamSlot(slotNumber, pokemon, movesEffectiveness = null, isBestCo
                 </div>
                 <div class="pokemon-right-section">
                     ${movesHTML}
+                    ${battleResultHTML}
                 </div>
                 <button class="remove-pokemon" onclick="removePokemonFromTeam('${slotNumber}')">×</button>
             </div>
@@ -666,12 +752,14 @@ function renderOpponentMovesVsTeam(opponentMovesVsTeam, teamNames) {
 // Hook into selection changes
 function onSelectionChange() {
     if (currentOpponent && userTeam.length > 0) {
-        updateMatchupAnalysis();
+        runBattleSimulations();
     } else {
         // Clear effectiveness from team slots when no opponent
         userTeam.forEach(pokemon => {
             updateTeamSlot(pokemon.slot, pokemon, null, false);
         });
+        // Clear battle results
+        window.currentBattleResults = null;
     }
 }
 
@@ -696,11 +784,13 @@ function initBattleSimulations() {
 
 async function runBattleSimulations() {
     if (!currentOpponent || userTeam.length === 0) {
+        console.log('No opponent or team members, skipping battle simulations');
         return;
     }
 
-    const simulationsContainer = document.getElementById('battleSimulations');
-    simulationsContainer.innerHTML = '<div class="loading">Running battle simulations...</div>';
+    console.log('Starting battle simulations...');
+    console.log('Current opponent:', currentOpponent);
+    console.log('User team:', userTeam);
 
     const results = [];
     const shieldCount = battleSimulationState.shieldCount;
@@ -710,14 +800,24 @@ async function runBattleSimulations() {
         const teamPokemon = userTeam[i];
         if (!teamPokemon) continue;
 
+        console.log(`Simulating battle for ${teamPokemon.name} vs ${currentOpponent.name}`);
+
         try {
             // Get PvP moves for team Pokémon
             const teamMoves = await getPvPMovesForPokemon(teamPokemon.name);
-            if (!teamMoves || teamMoves.length === 0) continue;
+            console.log(`Team moves for ${teamPokemon.name}:`, teamMoves);
+            if (!teamMoves || teamMoves.length === 0) {
+                console.log(`No PvP moves found for ${teamPokemon.name}`);
+                continue;
+            }
 
             // Get PvP moves for opponent
             const opponentMoves = await getPvPMovesForPokemon(currentOpponent.name);
-            if (!opponentMoves || opponentMoves.length === 0) continue;
+            console.log(`Opponent moves for ${currentOpponent.name}:`, opponentMoves);
+            if (!opponentMoves || opponentMoves.length === 0) {
+                console.log(`No PvP moves found for ${currentOpponent.name}`);
+                continue;
+            }
 
             // Run battle simulation
             const battleResult = await runSingleBattle(
@@ -725,6 +825,8 @@ async function runBattleSimulations() {
                 currentOpponent, opponentMoves,
                 shieldCount
             );
+
+            console.log(`Battle result for ${teamPokemon.name}:`, battleResult);
 
             results.push({
                 teamPokemon,
@@ -737,6 +839,8 @@ async function runBattleSimulations() {
         }
     }
 
+    console.log('All battle results:', results);
+
     // Sort by battle rating (highest first)
     results.sort((a, b) => b.battleResult.battle_rating - a.battleResult.battle_rating);
 
@@ -746,9 +850,13 @@ async function runBattleSimulations() {
 
 async function getPvPMovesForPokemon(pokemonName) {
     try {
+        console.log(`Getting PvP moves for: ${pokemonName}`);
+        
         // Try with the name as-is first
         let response = await fetch(`/api/pokemon/${pokemonName}`);
         let data = await response.json();
+        
+        console.log(`Initial response for ${pokemonName}:`, data);
         
         // If not found and it's an alternate form, try with speciesId format
         if (data.error && pokemonName.includes('(')) {
@@ -760,11 +868,15 @@ async function getPvPMovesForPokemon(pokemonName) {
                 .replace('alolan', 'alola')
                 .replace('hisuian', 'hisui');
             
+            console.log(`Trying with speciesId: ${speciesId}`);
             response = await fetch(`/api/pokemon/${speciesId}`);
             data = await response.json();
+            console.log(`SpeciesId response for ${pokemonName}:`, data);
         }
         
-        return data.pvp_moves || [];
+        const pvpMoves = data.pvp_moves || [];
+        console.log(`PvP moves for ${pokemonName}:`, pvpMoves);
+        return pvpMoves;
     } catch (error) {
         console.error(`Error getting PvP moves for ${pokemonName}:`, error);
         return [];
@@ -772,12 +884,21 @@ async function getPvPMovesForPokemon(pokemonName) {
 }
 
 async function runSingleBattle(teamPokemon, teamMoves, opponentPokemon, opponentMoves, shieldCount) {
+    console.log('Running single battle with:', { teamPokemon, teamMoves, opponentPokemon, opponentMoves, shieldCount });
+    
     // Prepare battle data using best PvP moves
     const teamFastMove = teamMoves.find(m => m.move_class === 'fast');
     const teamChargedMoves = teamMoves.filter(m => m.move_class === 'charged').slice(0, 2);
     
     const opponentFastMove = opponentMoves.find(m => m.move_class === 'fast');
     const opponentChargedMoves = opponentMoves.filter(m => m.move_class === 'charged').slice(0, 2);
+
+    console.log('Selected moves:', {
+        teamFastMove,
+        teamChargedMoves,
+        opponentFastMove,
+        opponentChargedMoves
+    });
 
     // Use speciesId for API calls (handles alternate forms correctly)
     let teamId = teamPokemon.speciesId || teamPokemon.name;
@@ -804,6 +925,8 @@ async function runSingleBattle(teamPokemon, teamMoves, opponentPokemon, opponent
             .replace('hisuian', 'hisuian');   // Keep as 'hisuian', not 'hisui'
     }
 
+    console.log('Using IDs:', { teamId, opponentId });
+
     const battleData = {
         p1_id: teamId,
         p2_id: opponentId,
@@ -821,6 +944,8 @@ async function runSingleBattle(teamPokemon, teamMoves, opponentPokemon, opponent
         p2_shields: shieldCount
     };
 
+    console.log('Battle data before cleanup:', battleData);
+
     // Remove empty moves
     Object.keys(battleData.p1_moves).forEach(key => {
         if (!battleData.p1_moves[key]) delete battleData.p1_moves[key];
@@ -828,6 +953,8 @@ async function runSingleBattle(teamPokemon, teamMoves, opponentPokemon, opponent
     Object.keys(battleData.p2_moves).forEach(key => {
         if (!battleData.p2_moves[key]) delete battleData.p2_moves[key];
     });
+
+    console.log('Final battle data:', battleData);
 
     try {
         const response = await fetch('/api/battle', {
@@ -837,6 +964,8 @@ async function runSingleBattle(teamPokemon, teamMoves, opponentPokemon, opponent
         });
 
         const result = await response.json();
+        console.log('Battle API response:', result);
+        
         if (result.error) {
             throw new Error(result.error);
         }
@@ -856,97 +985,16 @@ async function runSingleBattle(teamPokemon, teamMoves, opponentPokemon, opponent
 }
 
 function displayBattleSimulations(results) {
-    const container = document.getElementById('battleSimulations');
+    // Store results globally for team slots to access
+    window.currentBattleResults = results;
     
-    if (results.length === 0) {
-        container.innerHTML = '<div class="no-results">No battle simulations available</div>';
-        return;
-    }
-
-    container.innerHTML = '';
+    // Update all team slots to show battle results
+    userTeam.forEach(pokemon => {
+        updateTeamSlot(pokemon.slot, pokemon);
+    });
 
     // Find the best counter (highest rating)
     const bestRating = results.length > 0 ? results[0].battleResult.battle_rating : 0;
-
-    results.forEach((result, index) => {
-        const isBestCounter = result.battleResult.battle_rating === bestRating;
-        
-        const simulationElement = document.createElement('div');
-        simulationElement.className = `battle-simulation-item ${isBestCounter ? 'best-counter' : ''}`;
-        
-        const winner = result.battleResult.winner;
-        const battleRating = result.battleResult.battle_rating;
-        const teamHpRemaining = result.battleResult.p1_final_hp;
-        const opponentHpRemaining = result.battleResult.p2_final_hp;
-        
-        // Determine what to display based on winner and HP
-        let ratingDisplay, winnerText, winnerClass, ratingColor;
-        
-        // Check if it's actually a tie (both Pokémon have 0 HP)
-        const isActualTie = teamHpRemaining === 0 && opponentHpRemaining === 0;
-        
-        if (isActualTie) {
-            // True tie - both fainted
-            ratingDisplay = 'Tie';
-            winnerText = 'Tie';
-            winnerClass = 'tie';
-            ratingColor = 'neutral';
-        } else if (teamHpRemaining > 0 && opponentHpRemaining === 0) {
-            // Your Pokémon won - opponent fainted
-            const hpPercent = Math.round((teamHpRemaining / result.teamPokemon.stats.hp) * 100);
-            ratingDisplay = `${hpPercent}% HP`;
-            winnerText = 'Wins';
-            winnerClass = 'wins';
-            ratingColor = hpPercent > 50 ? 'excellent' : hpPercent > 25 ? 'good' : 'close';
-        } else if (opponentHpRemaining > 0 && teamHpRemaining === 0) {
-            // Opponent won - your Pokémon fainted
-            const hpPercent = Math.round((opponentHpRemaining / currentOpponent.stats.hp) * 100);
-            ratingDisplay = `${hpPercent}% HP`;
-            winnerText = 'Loses';
-            winnerClass = 'loses';
-            ratingColor = hpPercent > 50 ? 'bad' : hpPercent > 25 ? 'close-loss' : 'close';
-        } else if (teamHpRemaining > opponentHpRemaining) {
-            // Your Pokémon won with more HP remaining
-            const hpPercent = Math.round((teamHpRemaining / result.teamPokemon.stats.hp) * 100);
-            ratingDisplay = `${hpPercent}% HP`;
-            winnerText = 'Wins';
-            winnerClass = 'wins';
-            ratingColor = hpPercent > 50 ? 'excellent' : hpPercent > 25 ? 'good' : 'close';
-        } else if (opponentHpRemaining > teamHpRemaining) {
-            // Opponent won with more HP remaining
-            const hpPercent = Math.round((opponentHpRemaining / currentOpponent.stats.hp) * 100);
-            ratingDisplay = `${hpPercent}% HP`;
-            winnerText = 'Loses';
-            winnerClass = 'loses';
-            ratingColor = hpPercent > 50 ? 'bad' : hpPercent > 25 ? 'close-loss' : 'close';
-        } else {
-            // Equal HP remaining (very rare)
-            const hpPercent = Math.round((teamHpRemaining / result.teamPokemon.stats.hp) * 100);
-            ratingDisplay = `${hpPercent}% HP`;
-            winnerText = 'Tie';
-            winnerClass = 'tie';
-            ratingColor = 'neutral';
-        }
-
-        simulationElement.innerHTML = `
-            <div class="pokemon-info">
-                <img src="${result.teamPokemon.sprite}" alt="${result.teamPokemon.name}" class="pokemon-sprite">
-                <div class="pokemon-details">
-                    <h5>${result.teamPokemon.name}</h5>
-                    <div class="types">
-                        ${result.teamPokemon.types.map(type => `<span class="type-badge type-${type}">${type}</span>`).join('')}
-                    </div>
-                </div>
-            </div>
-            <div class="battle-rating">
-                <div class="rating-value rating-${ratingColor}">${ratingDisplay}</div>
-                <div class="winner-indicator ${winnerClass}">${winnerText}</div>
-                <div class="hp-details">You: ${teamHpRemaining} HP | Opponent: ${opponentHpRemaining} HP</div>
-            </div>
-        `;
-
-        container.appendChild(simulationElement);
-    });
 
     // Update team slot borders to show best counter
     updateTeamSlotBorders(results, bestRating);

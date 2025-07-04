@@ -67,13 +67,23 @@ def get_pvp_moves_for_pokemon(name):
     # Try direct match, then try removing dashes/spaces, then fallback
     key = name.lower().replace(' ', '').replace('_', '-').replace('.', '').replace("'", "").replace('é', 'e')
     
-    # Handle special cases for form names
-    if 'galarian' in key:
-        key = key.replace('galarian', 'galar')
-    if 'alolan' in key:
-        key = key.replace('alolan', 'alola')
-    if 'hisuian' in key:
-        key = key.replace('hisuian', 'hisui')
+    # Handle special cases for form names - match the CSV loading format
+    if '(galarian)' in name.lower():
+        key = key.replace('(galarian)', '-galar')
+    elif '(alolan)' in name.lower():
+        key = key.replace('(alolan)', '-alola')
+    elif '(hisuian)' in name.lower():
+        key = key.replace('(hisuian)', '-hisui')
+    elif '(shadow)' in name.lower():
+        key = key.replace('(shadow)', '-shadow')
+    else:
+        # Fallback for other formats
+        if 'galarian' in key:
+            key = key.replace('galarian', 'galar')
+        if 'alolan' in key:
+            key = key.replace('alolan', 'alola')
+        if 'hisuian' in key:
+            key = key.replace('hisuian', 'hisui')
     
     if key in pvp_moves_by_name:
         row = pvp_moves_by_name[key]
@@ -197,6 +207,7 @@ def get_pokemon(name):
         formatted_data = {
             'id': p.get('dex'),
             'name': p.get('speciesName'),
+            'speciesId': p.get('speciesId'),
             'types': types,
             'stats': p.get('baseStats', {}),
             'effectiveness': effectiveness,

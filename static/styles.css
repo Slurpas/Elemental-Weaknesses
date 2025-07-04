@@ -524,6 +524,85 @@ header p {
     width: 70%;
 }
 
+.team-battle-result {
+    margin-top: 12px;
+    padding: 8px;
+    background: #f8f9fa;
+    border-radius: 6px;
+    border-left: 3px solid #667eea;
+}
+
+.team-battle-result h4 {
+    font-size: 0.8rem;
+    font-weight: 600;
+    margin-bottom: 6px;
+    color: #333;
+}
+
+.battle-result-display {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.battle-result-display .rating-value {
+    font-size: 0.9rem;
+    font-weight: bold;
+}
+
+.battle-result-display .winner-indicator {
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.battle-result-display .winner-indicator.wins {
+    color: #28a745;
+}
+
+.battle-result-display .winner-indicator.loses {
+    color: #dc3545;
+}
+
+.battle-result-display .winner-indicator.tie {
+    color: #ffc107;
+}
+
+.battle-result-display .hp-details {
+    font-size: 0.7rem;
+    color: #666;
+}
+
+.battle-result-display .no-battle-data {
+    font-size: 0.75rem;
+    color: #999;
+    font-style: italic;
+}
+
+/* Battle rating color coding for team slots */
+.battle-result-display .rating-value.rating-excellent {
+    color: #28a745;
+}
+
+.battle-result-display .rating-value.rating-good {
+    color: #20c997;
+}
+
+.battle-result-display .rating-value.rating-close {
+    color: #ffc107;
+}
+
+.battle-result-display .rating-value.rating-neutral {
+    color: #6c757d;
+}
+
+.battle-result-display .rating-value.rating-close-loss {
+    color: #fd7e14;
+}
+
+.battle-result-display .rating-value.rating-bad {
+    color: #dc3545;
+}
+
 .team-moves-section h4 {
     font-size: 0.9rem;
     font-weight: 600;
