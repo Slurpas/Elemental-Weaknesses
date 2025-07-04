@@ -66,6 +66,15 @@ def get_move_type_and_class(move_name):
 def get_pvp_moves_for_pokemon(name):
     # Try direct match, then try removing dashes/spaces, then fallback
     key = name.lower().replace(' ', '').replace('_', '-').replace('.', '').replace("'", "").replace('é', 'e')
+    
+    # Handle special cases for form names
+    if 'galarian' in key:
+        key = key.replace('galarian', 'galar')
+    if 'alolan' in key:
+        key = key.replace('alolan', 'alola')
+    if 'hisuian' in key:
+        key = key.replace('hisuian', 'hisui')
+    
     if key in pvp_moves_by_name:
         row = pvp_moves_by_name[key]
     else:
@@ -135,10 +144,10 @@ def get_move_effectiveness(move_type, defender_types):
 def get_pokemon(name):
     """API endpoint to get Pokemon data (local gamemaster.json version)"""
     try:
-        # Check cache first
-        cached_data = get_cached_pokemon(name.lower())
-        if cached_data:
-            return jsonify(cached_data)
+        # Check cache first (but skip for now to ensure fresh data)
+        # cached_data = get_cached_pokemon(name.lower())
+        # if cached_data:
+        #     return jsonify(cached_data)
 
         # Try to match by speciesId first, then by name
         p = poke_data.get_by_species_id(name)
@@ -158,7 +167,7 @@ def get_pokemon(name):
         for move_id in p.get('fastMoves', []) + p.get('chargedMoves', []):
             # Try to infer move type from move_id (e.g., "FIRE_BLAST" -> "fire")
             move_type = None
-            for t in poke_data.all_types():
+            for t in poke_data.get_all_types():
                 if t in move_id.lower():
                     move_type = t
                     break
@@ -169,7 +178,11 @@ def get_pokemon(name):
             })
 
         # Get PvP moves from CSV (if still desired)
-        pvp_moves = get_pvp_moves_for_pokemon(name)
+        # Try with speciesName first, then with speciesId
+        pvp_moves = get_pvp_moves_for_pokemon(p.get('speciesName', name))
+        if not pvp_moves:
+            pvp_moves = get_pvp_moves_for_pokemon(name)
+        
         for move in pvp_moves:
             if move['type']:
                 mult, label = get_move_effectiveness(move['type'], types)
@@ -207,32 +220,31 @@ def search_pokemon(query):
         # Use local data for all Pokémon
         all_pokemon = poke_data.pokemon
 
-        # Build readable names for forms
-        def readable_name(species_name):
-            # e.g. "Stunfisk (Galarian)" or "Charizard (Mega X)"
-            if '(' in species_name:
-                return species_name
-            # Try to infer from speciesId
-            return species_name
-
         normalized_query = query.lower().replace(' ', '').replace('-', '')
         def norm(s):
             return s.lower().replace(' ', '').replace('-', '')
+        
         matching_pokemon = [
             {
                 'name': p['speciesId'],
-                'readable_name': readable_name(p['speciesName'])
+                'readable_name': p['speciesName'],
+                'sprite': f"/static/sprites/{p['speciesId']}.png",
+                'types': p.get('types', [])
             }
             for p in all_pokemon
             if normalized_query in norm(p.get('speciesName', '')) or normalized_query in norm(p.get('speciesId', ''))
         ]
+        
         if not matching_pokemon and all_pokemon:
             # fallback: return the closest match
             best = min(all_pokemon, key=lambda p: abs(len(norm(p.get('speciesName', ''))) - len(normalized_query)))
             matching_pokemon = [{
                 'name': best['speciesId'],
-                'readable_name': readable_name(best['speciesName'])
+                'readable_name': best['speciesName'],
+                'sprite': f"/static/sprites/{best['speciesId']}.png",
+                'types': best.get('types', [])
             }]
+        
         matching_pokemon = matching_pokemon[:10]  # Limit to 10 results
         return jsonify(matching_pokemon)
 

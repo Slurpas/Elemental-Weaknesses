@@ -221,6 +221,27 @@ header p {
     display: block;
 }
 
+.pokemon-content-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin-top: 20px;
+}
+
+.effectiveness-section {
+    min-width: 0;
+}
+
+.battle-results-section {
+    min-width: 0;
+}
+
+.battle-results-section h3 {
+    margin-bottom: 16px;
+    color: #333;
+    font-size: 1.1rem;
+}
+
 .effectiveness-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
@@ -335,6 +356,63 @@ header p {
     color: #333;
 }
 
+/* Shield Selector */
+.shield-selector-top {
+    margin-bottom: 20px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border: 1px solid #e9ecef;
+}
+
+.shield-selector-top label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 10px;
+    color: #333;
+}
+
+.shield-slider-container {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.shield-slider {
+    flex: 1;
+    height: 6px;
+    border-radius: 3px;
+    background: #ddd;
+    outline: none;
+    -webkit-appearance: none;
+}
+
+.shield-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #667eea;
+    cursor: pointer;
+}
+
+.shield-slider::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #667eea;
+    cursor: pointer;
+    border: none;
+}
+
+#shieldValue {
+    font-weight: 600;
+    color: #667eea;
+    min-width: 20px;
+    text-align: center;
+}
+
 .team-slots {
     display: flex;
     flex-direction: column;
@@ -443,7 +521,7 @@ header p {
 }
 
 .team-moves-section {
-    width: 100%;
+    width: 70%;
 }
 
 .team-moves-section h4 {
@@ -631,41 +709,121 @@ header p {
     font-size: 0.7rem;
 }
 
-.matchup-list {
+.battle-simulations-list {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 12px;
 }
 
-.matchup-item {
+.battle-simulation-item {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 8px 12px;
+    padding: 15px;
     background: #f8f9fa;
-    border-radius: 6px;
+    border-radius: 8px;
+    border-left: 4px solid #667eea;
+    transition: all 0.3s ease;
+}
+
+.battle-simulation-item.best-counter {
+    border-left-color: #28a745;
+    background: #f8fff9;
+    box-shadow: 0 2px 8px rgba(40, 167, 69, 0.2);
+}
+
+.battle-simulation-item .pokemon-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.battle-simulation-item .pokemon-sprite {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+}
+
+.battle-simulation-item .pokemon-details h5 {
+    margin: 0 0 4px 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #333;
+}
+
+.battle-simulation-item .pokemon-details .types {
+    display: flex;
+    gap: 4px;
+}
+
+.battle-simulation-item .battle-rating {
+    text-align: right;
+}
+
+.battle-simulation-item .rating-value {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: #667eea;
+    margin-bottom: 4px;
+}
+
+.battle-simulation-item.best-counter .rating-value {
+    color: #28a745;
+}
+
+.battle-simulation-item .winner-indicator {
     font-size: 0.9rem;
-}
-
-.matchup-pokemon {
-    font-weight: 600;
-    text-transform: capitalize;
-}
-
-.matchup-effectiveness {
-    font-weight: 600;
-}
-
-.matchup-effectiveness.good {
-    color: #4CAF50;
-}
-
-.matchup-effectiveness.bad {
-    color: #ff6b6b;
-}
-
-.matchup-effectiveness.neutral {
     color: #666;
+    font-weight: 500;
+}
+
+.battle-simulation-item .winner-indicator.wins {
+    color: #28a745;
+}
+
+.battle-simulation-item .winner-indicator.loses {
+    color: #dc3545;
+}
+
+.battle-simulation-item .winner-indicator.tie {
+    color: #ffc107;
+}
+
+.battle-simulation-item .hp-details {
+    font-size: 0.8rem;
+    color: #999;
+    margin-top: 2px;
+}
+
+/* Battle rating color coding */
+.battle-simulation-item .rating-value.rating-excellent {
+    color: #28a745;
+    font-weight: bold;
+}
+
+.battle-simulation-item .rating-value.rating-good {
+    color: #20c997;
+    font-weight: bold;
+}
+
+.battle-simulation-item .rating-value.rating-close {
+    color: #ffc107;
+    font-weight: bold;
+}
+
+.battle-simulation-item .rating-value.rating-neutral {
+    color: #6c757d;
+    font-weight: bold;
+}
+
+.battle-simulation-item .rating-value.rating-close-loss {
+    color: #fd7e14;
+    font-weight: bold;
+}
+
+.battle-simulation-item .rating-value.rating-bad {
+    color: #dc3545;
+    font-weight: bold;
 }
 
 /* Pokemon Type Colors */

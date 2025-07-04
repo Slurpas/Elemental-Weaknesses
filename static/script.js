@@ -24,18 +24,10 @@ const teamModalSearch = document.getElementById('teamModalSearch');
 const teamModalResults = document.getElementById('teamModalResults');
 const closeTeamModalBtn = document.getElementById('closeTeamModal');
 
-// Battle Simulator State
-let battleState = {
-    pokemon1: null,
-    pokemon2: null,
-    pokemon1Moves: null,
-    pokemon2Moves: null
-};
-
-// Battle Modal State
-let battleModalState = {
-    isOpen: false,
-    selectingFor: null // 'pokemon1' or 'pokemon2'
+// Battle Simulation State
+let battleSimulationState = {
+    shieldCount: 2,
+    simulations: {} // Cache for battle results
 };
 
 pokemonSearch.addEventListener('input', (e) => {
@@ -68,24 +60,7 @@ pokemonSearch.addEventListener('keypress', (e) => {
     }
 });
 
-// Tab switching
-tabBtns.forEach(btn => {
-    btn.addEventListener('click', () => {
-        const targetTab = btn.dataset.tab;
-        
-        // Update active tab button
-        tabBtns.forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        
-        // Update active tab pane
-        tabPanes.forEach(pane => {
-            pane.classList.remove('active');
-            if (pane.id === targetTab) {
-                pane.classList.add('active');
-            }
-        });
-    });
-});
+// Tab switching - moved to initBattleSimulator to avoid conflicts
 
 async function searchPokemon(query) {
     try {
@@ -449,9 +424,9 @@ function updateTeamAnalysis() {
     const coverage = calculateTeamCoverage();
     displayTeamCoverage(coverage);
     
-    // Show matchups if there's a current opponent
+    // Run battle simulations if there's a current opponent
     if (currentOpponent) {
-        displayTeamMatchups();
+        runBattleSimulations();
     }
 }
 
@@ -497,39 +472,7 @@ function displayTeamCoverage(coverage) {
     coverageGrid.innerHTML = coverageHTML || '<div class="no-data">No coverage data</div>';
 }
 
-function displayTeamMatchups() {
-    if (!currentOpponent) return;
-    
-    const matchupList = document.getElementById('teamMatchups');
-    
-    const matchups = userTeam.map(pokemon => {
-        const effectiveness = currentOpponent.effectiveness.effectiveness[pokemon.types[0]] || 1;
-        let effectivenessClass = 'neutral';
-        let effectivenessText = `${effectiveness}x`;
-        
-        if (effectiveness > 1) {
-            effectivenessClass = 'bad';
-        } else if (effectiveness < 1) {
-            effectivenessClass = 'good';
-        }
-        
-        return {
-            pokemon: pokemon.name,
-            effectiveness: effectiveness,
-            effectivenessClass: effectivenessClass,
-            effectivenessText: effectivenessText
-        };
-    });
-    
-    const matchupHTML = matchups.map(matchup => `
-        <div class="matchup-item">
-            <span class="matchup-pokemon">${matchup.pokemon}</span>
-            <span class="matchup-effectiveness ${matchup.effectivenessClass}">${matchup.effectivenessText}</span>
-        </div>
-    `).join('');
-    
-    matchupList.innerHTML = matchupHTML;
-}
+
 
 // Close search results when clicking outside
 document.addEventListener('click', (e) => {
@@ -733,350 +676,302 @@ function onSelectionChange() {
 }
 
 // Initialize battle simulator functionality
-function initBattleSimulator() {
-    // Tab switching
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const tabName = btn.dataset.tab;
-            switchTab(tabName);
-        });
-    });
-
-    // Pokémon selection
-    document.getElementById('pokemon1Display').addEventListener('click', () => {
-        openBattleModal('pokemon1');
-    });
-
-    document.getElementById('pokemon2Display').addEventListener('click', () => {
-        openBattleModal('pokemon2');
-    });
-
-    // Battle modal
-    document.getElementById('closeBattleModal').addEventListener('click', closeBattleModal);
-    document.getElementById('battleModalSearch').addEventListener('input', handleBattleModalSearch);
-
-    // Run battle button
-    document.getElementById('runBattleBtn').addEventListener('click', runBattle);
-
-    // Move selection changes
-    ['pokemon1FastMove', 'pokemon1Charged1', 'pokemon1Charged2'].forEach(id => {
-        document.getElementById(id).addEventListener('change', () => updateBattleButton());
-    });
-
-    ['pokemon2FastMove', 'pokemon2Charged1', 'pokemon2Charged2'].forEach(id => {
-        document.getElementById(id).addEventListener('change', () => updateBattleButton());
+function initBattleSimulations() {
+    // Shield slider
+    const shieldSlider = document.getElementById('shieldSlider');
+    const shieldValue = document.getElementById('shieldValue');
+    
+    shieldSlider.addEventListener('input', (e) => {
+        const value = parseInt(e.target.value);
+        battleSimulationState.shieldCount = value;
+        shieldValue.textContent = value;
+        
+        // Clear cache and re-run simulations if opponent is selected
+        if (currentOpponent) {
+            battleSimulationState.simulations = {};
+            runBattleSimulations();
+        }
     });
 }
 
-function switchTab(tabName) {
-    // Update tab buttons
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.classList.remove('active');
-    });
-    document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
-
-    // Update tab content
-    document.querySelectorAll('.tab-pane').forEach(pane => {
-        pane.classList.remove('active');
-    });
-    document.getElementById(tabName).classList.add('active');
-}
-
-function openBattleModal(forPokemon) {
-    battleModalState.isOpen = true;
-    battleModalState.selectingFor = forPokemon;
-    document.getElementById('battleModal').classList.remove('hidden');
-    document.getElementById('battleModalSearch').value = '';
-    document.getElementById('battleModalResults').innerHTML = '';
-    document.getElementById('battleModalSearch').focus();
-}
-
-function closeBattleModal() {
-    battleModalState.isOpen = false;
-    battleModalState.selectingFor = null;
-    document.getElementById('battleModal').classList.add('hidden');
-}
-
-async function handleBattleModalSearch(event) {
-    const query = event.target.value.trim();
-    if (query.length < 2) {
-        document.getElementById('battleModalResults').innerHTML = '';
+async function runBattleSimulations() {
+    if (!currentOpponent || userTeam.length === 0) {
         return;
     }
 
-    try {
-        const response = await fetch(`/api/search/${query}`);
-        const data = await response.json();
-        
-        if (data.error) {
-            document.getElementById('battleModalResults').innerHTML = '<p class="error">No Pokemon found</p>';
-            return;
-        }
+    const simulationsContainer = document.getElementById('battleSimulations');
+    simulationsContainer.innerHTML = '<div class="loading">Running battle simulations...</div>';
 
-        displayBattleModalResults(data);
+    const results = [];
+    const shieldCount = battleSimulationState.shieldCount;
+
+    // Run simulations for each team member vs opponent
+    for (let i = 0; i < userTeam.length; i++) {
+        const teamPokemon = userTeam[i];
+        if (!teamPokemon) continue;
+
+        try {
+            // Get PvP moves for team Pokémon
+            const teamMoves = await getPvPMovesForPokemon(teamPokemon.name);
+            if (!teamMoves || teamMoves.length === 0) continue;
+
+            // Get PvP moves for opponent
+            const opponentMoves = await getPvPMovesForPokemon(currentOpponent.name);
+            if (!opponentMoves || opponentMoves.length === 0) continue;
+
+            // Run battle simulation
+            const battleResult = await runSingleBattle(
+                teamPokemon, teamMoves,
+                currentOpponent, opponentMoves,
+                shieldCount
+            );
+
+            results.push({
+                teamPokemon,
+                battleResult,
+                slotIndex: i
+            });
+
+        } catch (error) {
+            console.error(`Error simulating battle for ${teamPokemon.name}:`, error);
+        }
+    }
+
+    // Sort by battle rating (highest first)
+    results.sort((a, b) => b.battleResult.battle_rating - a.battleResult.battle_rating);
+
+    // Display results
+    displayBattleSimulations(results);
+}
+
+async function getPvPMovesForPokemon(pokemonName) {
+    try {
+        // Try with the name as-is first
+        let response = await fetch(`/api/pokemon/${pokemonName}`);
+        let data = await response.json();
+        
+        // If not found and it's an alternate form, try with speciesId format
+        if (data.error && pokemonName.includes('(')) {
+            const speciesId = pokemonName.toLowerCase()
+                .replace('(', '')
+                .replace(')', '')
+                .replace(' ', '_')
+                .replace('galarian', 'galar')
+                .replace('alolan', 'alola')
+                .replace('hisuian', 'hisui');
+            
+            response = await fetch(`/api/pokemon/${speciesId}`);
+            data = await response.json();
+        }
+        
+        return data.pvp_moves || [];
     } catch (error) {
-        console.error('Error searching for Pokemon:', error);
-        document.getElementById('battleModalResults').innerHTML = '<p class="error">Error searching for Pokemon</p>';
+        console.error(`Error getting PvP moves for ${pokemonName}:`, error);
+        return [];
     }
 }
 
-function displayBattleModalResults(pokemonList) {
-    const resultsContainer = document.getElementById('battleModalResults');
-    resultsContainer.innerHTML = '';
-
-    pokemonList.forEach(pokemon => {
-        const pokemonElement = document.createElement('div');
-        pokemonElement.className = 'modal-result-item';
-        pokemonElement.innerHTML = `
-            <img src="${pokemon.sprite}" alt="${pokemon.name}" class="result-sprite">
-            <div class="result-info">
-                <h4>${pokemon.name}</h4>
-                <div class="types">
-                    ${pokemon.types.map(type => `<span class="type-badge ${type}">${type}</span>`).join('')}
-                </div>
-            </div>
-        `;
-        
-        pokemonElement.addEventListener('click', () => selectPokemonForBattle(pokemon));
-        resultsContainer.appendChild(pokemonElement);
-    });
-}
-
-async function selectPokemonForBattle(pokemon) {
-    const forPokemon = battleModalState.selectingFor;
+async function runSingleBattle(teamPokemon, teamMoves, opponentPokemon, opponentMoves, shieldCount) {
+    // Prepare battle data using best PvP moves
+    const teamFastMove = teamMoves.find(m => m.move_class === 'fast');
+    const teamChargedMoves = teamMoves.filter(m => m.move_class === 'charged').slice(0, 2);
     
-    try {
-        // Get moves for the selected Pokémon
-        const response = await fetch(`/api/pokemon/${pokemon.species_id}/moves`);
-        const movesData = await response.json();
-        
-        if (movesData.error) {
-            console.error('Error getting moves:', movesData.error);
-            return;
-        }
+    const opponentFastMove = opponentMoves.find(m => m.move_class === 'fast');
+    const opponentChargedMoves = opponentMoves.filter(m => m.move_class === 'charged').slice(0, 2);
 
-        // Update battle state
-        battleState[forPokemon] = pokemon;
-        battleState[`${forPokemon}Moves`] = movesData;
-
-        // Update UI
-        updatePokemonDisplay(forPokemon, pokemon, movesData);
-        updateBattleButton();
-        
-        closeBattleModal();
-    } catch (error) {
-        console.error('Error selecting Pokemon for battle:', error);
+    // Use speciesId for API calls (handles alternate forms correctly)
+    let teamId = teamPokemon.speciesId || teamPokemon.name;
+    let opponentId = opponentPokemon.speciesId || opponentPokemon.name;
+    
+    // Handle alternate forms by converting names to speciesId format
+    if (teamPokemon.name.includes('(') && !teamId.includes('_')) {
+        teamId = teamPokemon.name.toLowerCase()
+            .replace('(', '')
+            .replace(')', '')
+            .replace(' ', '_')
+            .replace('galarian', 'galarian')  // Keep as 'galarian', not 'galar'
+            .replace('alolan', 'alolan')      // Keep as 'alolan', not 'alola'
+            .replace('hisuian', 'hisuian');   // Keep as 'hisuian', not 'hisui'
     }
-}
-
-function updatePokemonDisplay(forPokemon, pokemon, movesData) {
-    const displayElement = document.getElementById(`${forPokemon}Display`);
-    const movesElement = document.getElementById(`${forPokemon}Moves`);
     
-    // Update Pokémon display
-    displayElement.innerHTML = `
-        <div class="pokemon-selected">
-            <img src="${pokemon.sprite}" alt="${pokemon.name}">
-            <div class="pokemon-selected-info">
-                <h5>${pokemon.name}</h5>
-                <div class="types">
-                    ${pokemon.types.map(type => `<span class="type-badge ${type}">${type}</span>`).join('')}
-                </div>
-            </div>
-        </div>
-    `;
-    
-    // Show moves selection
-    movesElement.style.display = 'block';
-    
-    // Populate move dropdowns
-    populateMoveDropdowns(forPokemon, movesData);
-}
-
-function populateMoveDropdowns(forPokemon, movesData) {
-    // Fast moves
-    const fastSelect = document.getElementById(`${forPokemon}FastMove`);
-    fastSelect.innerHTML = '<option value="">Select Fast Move</option>';
-    movesData.fast_moves.forEach(move => {
-        const option = document.createElement('option');
-        option.value = move.id;
-        option.textContent = `${move.name} (${move.power} power, ${move.energyGain} energy)`;
-        if (movesData.best_moveset && movesData.best_moveset.fast === move.id) {
-            option.textContent += ' ★';
-        }
-        fastSelect.appendChild(option);
-    });
-
-    // Charged moves
-    const charged1Select = document.getElementById(`${forPokemon}Charged1`);
-    const charged2Select = document.getElementById(`${forPokemon}Charged2`);
-    
-    charged1Select.innerHTML = '<option value="">Select Charged Move 1</option>';
-    charged2Select.innerHTML = '<option value="">Select Charged Move 2</option>';
-    
-    movesData.charged_moves.forEach(move => {
-        const option1 = document.createElement('option');
-        const option2 = document.createElement('option');
-        
-        option1.value = move.id;
-        option2.value = move.id;
-        
-        const moveText = `${move.name} (${move.power} power, ${move.energy} energy)`;
-        option1.textContent = moveText;
-        option2.textContent = moveText;
-        
-        if (movesData.best_moveset) {
-            if (movesData.best_moveset.charged1 === move.id) {
-                option1.textContent += ' ★';
-            }
-            if (movesData.best_moveset.charged2 === move.id) {
-                option2.textContent += ' ★';
-            }
-        }
-        
-        charged1Select.appendChild(option1.cloneNode(true));
-        charged2Select.appendChild(option2.cloneNode(true));
-    });
-
-    // Set best moves if available
-    if (movesData.best_moveset) {
-        if (movesData.best_moveset.fast) {
-            fastSelect.value = movesData.best_moveset.fast;
-        }
-        if (movesData.best_moveset.charged1) {
-            charged1Select.value = movesData.best_moveset.charged1;
-        }
-        if (movesData.best_moveset.charged2) {
-            charged2Select.value = movesData.best_moveset.charged2;
-        }
+    if (opponentPokemon.name.includes('(') && !opponentId.includes('_')) {
+        opponentId = opponentPokemon.name.toLowerCase()
+            .replace('(', '')
+            .replace(')', '')
+            .replace(' ', '_')
+            .replace('galarian', 'galarian')  // Keep as 'galarian', not 'galar'
+            .replace('alolan', 'alolan')      // Keep as 'alolan', not 'alola'
+            .replace('hisuian', 'hisuian');   // Keep as 'hisuian', not 'hisui'
     }
-}
 
-function updateBattleButton() {
-    const runButton = document.getElementById('runBattleBtn');
-    const canRun = battleState.pokemon1 && battleState.pokemon2 && 
-                   document.getElementById('pokemon1FastMove').value &&
-                   document.getElementById('pokemon2FastMove').value;
-    
-    runButton.disabled = !canRun;
-}
+    const battleData = {
+        p1_id: teamId,
+        p2_id: opponentId,
+        p1_moves: {
+            fast: teamFastMove ? teamFastMove.name.toUpperCase().replace(' ', '_') : null,
+            charged1: teamChargedMoves[0] ? teamChargedMoves[0].name.toUpperCase().replace(' ', '_') : null,
+            charged2: teamChargedMoves[1] ? teamChargedMoves[1].name.toUpperCase().replace(' ', '_') : null
+        },
+        p2_moves: {
+            fast: opponentFastMove ? opponentFastMove.name.toUpperCase().replace(' ', '_') : null,
+            charged1: opponentChargedMoves[0] ? opponentChargedMoves[0].name.toUpperCase().replace(' ', '_') : null,
+            charged2: opponentChargedMoves[1] ? opponentChargedMoves[1].name.toUpperCase().replace(' ', '_') : null
+        },
+        p1_shields: shieldCount,
+        p2_shields: shieldCount
+    };
 
-async function runBattle() {
-    const runButton = document.getElementById('runBattleBtn');
-    runButton.disabled = true;
-    runButton.textContent = 'Running Battle...';
+    // Remove empty moves
+    Object.keys(battleData.p1_moves).forEach(key => {
+        if (!battleData.p1_moves[key]) delete battleData.p1_moves[key];
+    });
+    Object.keys(battleData.p2_moves).forEach(key => {
+        if (!battleData.p2_moves[key]) delete battleData.p2_moves[key];
+    });
 
     try {
-        // Collect battle data
-        const battleData = {
-            p1_id: battleState.pokemon1.species_id,
-            p2_id: battleState.pokemon2.species_id,
-            p1_moves: {
-                fast: document.getElementById('pokemon1FastMove').value,
-                charged1: document.getElementById('pokemon1Charged1').value,
-                charged2: document.getElementById('pokemon1Charged2').value
-            },
-            p2_moves: {
-                fast: document.getElementById('pokemon2FastMove').value,
-                charged1: document.getElementById('pokemon2Charged1').value,
-                charged2: document.getElementById('pokemon2Charged2').value
-            },
-            p1_shields: parseInt(document.getElementById('pokemon1Shields').value),
-            p2_shields: parseInt(document.getElementById('pokemon2Shields').value)
-        };
-
-        // Remove empty charged moves
-        if (!battleData.p1_moves.charged1) delete battleData.p1_moves.charged1;
-        if (!battleData.p1_moves.charged2) delete battleData.p1_moves.charged2;
-        if (!battleData.p2_moves.charged1) delete battleData.p2_moves.charged1;
-        if (!battleData.p2_moves.charged2) delete battleData.p2_moves.charged2;
-
         const response = await fetch('/api/battle', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(battleData)
         });
 
         const result = await response.json();
-        
         if (result.error) {
             throw new Error(result.error);
         }
 
-        displayBattleResults(result);
+        return result;
     } catch (error) {
         console.error('Battle simulation failed:', error);
-        alert('Battle simulation failed: ' + error.message);
-    } finally {
-        runButton.disabled = false;
-        runButton.textContent = 'Run Battle';
+        // Return a default result
+        return {
+            winner: 'tie',
+            battle_rating: 0.5,
+            p1_final_hp: 0,
+            p2_final_hp: 0,
+            turns: 0
+        };
     }
 }
 
-function displayBattleResults(result) {
-    const resultsElement = document.getElementById('battleResults');
-    resultsElement.classList.remove('hidden');
+function displayBattleSimulations(results) {
+    const container = document.getElementById('battleSimulations');
+    
+    if (results.length === 0) {
+        container.innerHTML = '<div class="no-results">No battle simulations available</div>';
+        return;
+    }
 
-    // Update winner display
-    const winnerName = result.winner === 'tie' ? 'Tie' : 
-                      result.winner === battleState.pokemon1.species_id ? battleState.pokemon1.name :
-                      battleState.pokemon2.name;
-    document.getElementById('winnerName').textContent = winnerName;
-
-    // Update battle stats
-    document.getElementById('battleTurns').textContent = result.turns;
-    document.getElementById('battleRating').textContent = Math.round(result.battle_rating * 100) + '%';
-
-    // Update final HP
-    document.getElementById('pokemon1FinalHP').textContent = result.p1_final_hp;
-    document.getElementById('pokemon2FinalHP').textContent = result.p2_final_hp;
-
-    // Display timeline
-    displayBattleTimeline(result.timeline);
-}
-
-function displayBattleTimeline(timeline) {
-    const container = document.getElementById('timelineContainer');
     container.innerHTML = '';
 
-    timeline.forEach(entry => {
-        const entryElement = document.createElement('div');
-        entryElement.className = `timeline-entry ${entry.type}-move`;
+    // Find the best counter (highest rating)
+    const bestRating = results.length > 0 ? results[0].battleResult.battle_rating : 0;
+
+    results.forEach((result, index) => {
+        const isBestCounter = result.battleResult.battle_rating === bestRating;
         
-        let actionText = '';
-        let detailsText = '';
-
-        if (entry.type === 'fast') {
-            actionText = `${entry.attacker} uses ${entry.move}`;
-            detailsText = `Damage: ${entry.damage} | Energy gained: ${entry.energy_gained} | ${entry.defender} HP: ${entry.defender_hp_remaining}`;
-        } else if (entry.type === 'charged') {
-            actionText = `${entry.attacker} uses ${entry.move}`;
-            if (entry.shield_used) {
-                detailsText = `SHIELDED | Energy used: ${entry.energy_used} | ${entry.defender} HP: ${entry.defender_hp_remaining}`;
-            } else {
-                detailsText = `Damage: ${entry.damage} | Energy used: ${entry.energy_used} | ${entry.defender} HP: ${entry.defender_hp_remaining}`;
-            }
+        const simulationElement = document.createElement('div');
+        simulationElement.className = `battle-simulation-item ${isBestCounter ? 'best-counter' : ''}`;
+        
+        const winner = result.battleResult.winner;
+        const battleRating = result.battleResult.battle_rating;
+        const teamHpRemaining = result.battleResult.p1_final_hp;
+        const opponentHpRemaining = result.battleResult.p2_final_hp;
+        
+        // Determine what to display based on winner and HP
+        let ratingDisplay, winnerText, winnerClass, ratingColor;
+        
+        // Check if it's actually a tie (both Pokémon have 0 HP)
+        const isActualTie = teamHpRemaining === 0 && opponentHpRemaining === 0;
+        
+        if (isActualTie) {
+            // True tie - both fainted
+            ratingDisplay = 'Tie';
+            winnerText = 'Tie';
+            winnerClass = 'tie';
+            ratingColor = 'neutral';
+        } else if (teamHpRemaining > 0 && opponentHpRemaining === 0) {
+            // Your Pokémon won - opponent fainted
+            const hpPercent = Math.round((teamHpRemaining / result.teamPokemon.stats.hp) * 100);
+            ratingDisplay = `${hpPercent}% HP`;
+            winnerText = 'Wins';
+            winnerClass = 'wins';
+            ratingColor = hpPercent > 50 ? 'excellent' : hpPercent > 25 ? 'good' : 'close';
+        } else if (opponentHpRemaining > 0 && teamHpRemaining === 0) {
+            // Opponent won - your Pokémon fainted
+            const hpPercent = Math.round((opponentHpRemaining / currentOpponent.stats.hp) * 100);
+            ratingDisplay = `${hpPercent}% HP`;
+            winnerText = 'Loses';
+            winnerClass = 'loses';
+            ratingColor = hpPercent > 50 ? 'bad' : hpPercent > 25 ? 'close-loss' : 'close';
+        } else if (teamHpRemaining > opponentHpRemaining) {
+            // Your Pokémon won with more HP remaining
+            const hpPercent = Math.round((teamHpRemaining / result.teamPokemon.stats.hp) * 100);
+            ratingDisplay = `${hpPercent}% HP`;
+            winnerText = 'Wins';
+            winnerClass = 'wins';
+            ratingColor = hpPercent > 50 ? 'excellent' : hpPercent > 25 ? 'good' : 'close';
+        } else if (opponentHpRemaining > teamHpRemaining) {
+            // Opponent won with more HP remaining
+            const hpPercent = Math.round((opponentHpRemaining / currentOpponent.stats.hp) * 100);
+            ratingDisplay = `${hpPercent}% HP`;
+            winnerText = 'Loses';
+            winnerClass = 'loses';
+            ratingColor = hpPercent > 50 ? 'bad' : hpPercent > 25 ? 'close-loss' : 'close';
+        } else {
+            // Equal HP remaining (very rare)
+            const hpPercent = Math.round((teamHpRemaining / result.teamPokemon.stats.hp) * 100);
+            ratingDisplay = `${hpPercent}% HP`;
+            winnerText = 'Tie';
+            winnerClass = 'tie';
+            ratingColor = 'neutral';
         }
 
-        if (entry.buff_applied) {
-            detailsText += ' | Buff applied';
-        }
-
-        entryElement.innerHTML = `
-            <span class="timeline-turn">T${entry.turn}</span>
-            <span class="timeline-action">${actionText}</span>
-            <span class="timeline-details">${detailsText}</span>
+        simulationElement.innerHTML = `
+            <div class="pokemon-info">
+                <img src="${result.teamPokemon.sprite}" alt="${result.teamPokemon.name}" class="pokemon-sprite">
+                <div class="pokemon-details">
+                    <h5>${result.teamPokemon.name}</h5>
+                    <div class="types">
+                        ${result.teamPokemon.types.map(type => `<span class="type-badge type-${type}">${type}</span>`).join('')}
+                    </div>
+                </div>
+            </div>
+            <div class="battle-rating">
+                <div class="rating-value rating-${ratingColor}">${ratingDisplay}</div>
+                <div class="winner-indicator ${winnerClass}">${winnerText}</div>
+                <div class="hp-details">You: ${teamHpRemaining} HP | Opponent: ${opponentHpRemaining} HP</div>
+            </div>
         `;
 
-        container.appendChild(entryElement);
+        container.appendChild(simulationElement);
+    });
+
+    // Update team slot borders to show best counter
+    updateTeamSlotBorders(results, bestRating);
+}
+
+function updateTeamSlotBorders(results, bestRating) {
+    // Clear all best-counter classes first
+    document.querySelectorAll('.team-slot').forEach(slot => {
+        slot.classList.remove('best-counter');
+    });
+
+    // Add best-counter class to slots with the best rating
+    results.forEach(result => {
+        if (result.battleResult.battle_rating === bestRating) {
+            const slot = document.querySelector(`[data-slot="${result.slotIndex + 1}"]`);
+            if (slot) {
+                slot.classList.add('best-counter');
+            }
+        }
     });
 }
 
-// Initialize battle simulator when DOM is loaded
+// Initialize battle simulations when DOM is loaded
 document.addEventListener('DOMContentLoaded', function() {
     // ... existing initialization code ...
     
-    initBattleSimulator();
+    initBattleSimulations();
 }); 
