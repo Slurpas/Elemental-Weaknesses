@@ -144,7 +144,7 @@ def index():
 def get_move_effectiveness(move_type, defender_types):
     # Use get_type_effectiveness to get the effectiveness dict for the defender
     eff = get_type_effectiveness(defender_types)
-    multiplier = eff['effectiveness'].get(move_type, 1.0)
+    multiplier = eff.get(move_type, 1.0)
     if multiplier > 1:
         label = 'Super Effective'
     elif multiplier < 1:
@@ -157,6 +157,8 @@ def get_move_effectiveness(move_type, defender_types):
 def get_pokemon(name):
     """API endpoint to get Pokemon data (local gamemaster.json version)"""
     try:
+        print(f"DEBUG: Looking for Pokemon: {name}")
+        
         # Check cache first (but skip for now to ensure fresh data)
         # cached_data = get_cached_pokemon(name.lower())
         # if cached_data:
@@ -165,9 +167,13 @@ def get_pokemon(name):
         # Try to match by speciesId first, then by name
         p = poke_data.get_by_species_id(name)
         if not p:
+            print(f"DEBUG: Not found by speciesId, trying by name")
             p = poke_data.get_by_name(name)
         if not p:
+            print(f"DEBUG: Pokemon not found: {name}")
             return jsonify({'error': f'Pokemon not found: {name}'}), 404
+        
+        print(f"DEBUG: Found Pokemon: {p.get('speciesName', 'Unknown')} (ID: {p.get('speciesId', 'Unknown')})")
 
         # Get types
         types = [t for t in p.get('types', []) if t and t != 'none']
@@ -405,63 +411,130 @@ def get_fallback_effectiveness(types):
 
 @app.route('/api/matchup', methods=['POST'])
 def matchup():
-    data = request.get_json()
-    opponent_name = data.get('opponent')
-    team = data.get('team', [])  # list of up to 3 names
-    
-    # Get opponent PvP moves
-    opponent_info = get_pokemon(opponent_name).json
-    opponent_types = None
-    if 'types' in opponent_info:
-        opponent_types = opponent_info['types']
-    elif 'effectiveness' in opponent_info:
-        # fallback: try to get types from effectiveness
-        opponent_types = opponent_info.get('effectiveness', {}).get('types', [])
-    else:
-        opponent_types = []
-    opponent_pvp_moves = opponent_info.get('pvp_moves', [])
-
-    # Get team info
-    team_infos = []
-    for name in team:
-        info = get_pokemon(name).json
-        team_infos.append(info)
-
-    # For each opponent move, calculate effectiveness vs each team member
-    opponent_moves_vs_team = []
-    for move in opponent_pvp_moves:
-        move_row = {
-            'move': move,
-            'vs_team': []
-        }
-        for t in team_infos:
-            t_types = t.get('types', [])
-            multiplier, label = get_move_effectiveness(move['type'], t_types)
-            move_row['vs_team'].append({'pokemon': t['name'], 'effectiveness': {'multiplier': multiplier, 'label': label}})
-        opponent_moves_vs_team.append(move_row)
-
-    # For each team member, get their PvP moves and effectiveness vs opponent
-    team_moves_vs_opponent = []
-    for t in team_infos:
-        t_moves = t.get('pvp_moves', [])
-        t_row = {
-            'pokemon': t['name'],
-            'moves': []
-        }
-        for move in t_moves:
-            multiplier, label = get_move_effectiveness(move['type'], opponent_types)
-            t_row['moves'].append({
-                'move': move,
-                'effectiveness': {'multiplier': multiplier, 'label': label}
+    """API endpoint to get matchup analysis between opponent and team"""
+    try:
+        data = request.get_json()
+        opponent_name = data.get('opponent')
+        team = data.get('team', [])  # list of up to 3 names
+        
+        if not opponent_name or not team:
+            return jsonify({'error': 'Missing opponent or team data'}), 400
+        
+        print(f"DEBUG: Matchup request - opponent: {opponent_name}, team: {team}")
+        
+        # Get opponent data directly from poke_data
+        opponent_data = poke_data.get_by_species_id(opponent_name)
+        if not opponent_data:
+            opponent_data = poke_data.get_by_name(opponent_name)
+        if not opponent_data:
+            return jsonify({'error': f'Opponent not found: {opponent_name}'}), 404
+        
+        opponent_types = opponent_data.get('types', [])
+        print(f"DEBUG: Opponent types: {opponent_types}")
+        
+        # Get opponent moves
+        opponent_moves = poke_data.get_pokemon_moves(opponent_data['speciesId'])
+        opponent_pvp_moves = []
+        for move in opponent_moves.get('fastMoves', []) + opponent_moves.get('chargedMoves', []):
+            opponent_pvp_moves.append({
+                'name': move['name'],
+                'type': move['type'],
+                'move_class': 'fast' if move in opponent_moves.get('fastMoves', []) else 'charged',
+                'power': move.get('power'),
+                'energy': move.get('energy'),
+                'energyGain': move.get('energyGain')
             })
-        team_moves_vs_opponent.append(t_row)
+        
+        print(f"DEBUG: Opponent moves: {len(opponent_moves.get('fastMoves', []))} fast, {len(opponent_moves.get('chargedMoves', []))} charged")
 
-    return jsonify({
-        'opponent': opponent_name,
-        'team': team,
-        'opponent_moves_vs_team': opponent_moves_vs_team,
-        'team_moves_vs_opponent': team_moves_vs_opponent
-    })
+        # Get team info directly from poke_data
+        team_infos = []
+        for name in team:
+            team_data = poke_data.get_by_species_id(name)
+            if not team_data:
+                team_data = poke_data.get_by_name(name)
+            if team_data:
+                team_moves = poke_data.get_pokemon_moves(team_data['speciesId'])
+                pvp_moves = []
+                for move in team_moves.get('fastMoves', []) + team_moves.get('chargedMoves', []):
+                    pvp_moves.append({
+                        'name': move['name'],
+                        'type': move['type'],
+                        'move_class': 'fast' if move in team_moves.get('fastMoves', []) else 'charged',
+                        'power': move.get('power'),
+                        'energy': move.get('energy'),
+                        'energyGain': move.get('energyGain')
+                    })
+                team_infos.append({
+                    'name': team_data['speciesName'],
+                    'types': team_data.get('types', []),
+                    'pvp_moves': pvp_moves
+                })
+            else:
+                team_infos.append({
+                    'name': name,
+                    'types': [],
+                    'pvp_moves': []
+                })
+
+        # For each opponent move, calculate effectiveness vs each team member
+        opponent_moves_vs_team = []
+        for move in opponent_pvp_moves:
+            move_row = {
+                'move': move,
+                'vs_team': []
+            }
+            for t in team_infos:
+                t_types = t.get('types', [])
+                try:
+                    multiplier, label = get_move_effectiveness(move['type'], t_types)
+                    move_row['vs_team'].append({
+                        'pokemon': t['name'], 
+                        'effectiveness': {'multiplier': multiplier, 'label': label}
+                    })
+                except Exception as move_error:
+                    print(f"DEBUG: Error calculating move effectiveness for {move['type']} vs {t_types}: {move_error}")
+                    move_row['vs_team'].append({
+                        'pokemon': t['name'], 
+                        'effectiveness': {'multiplier': 1.0, 'label': 'Neutral'}
+                    })
+            opponent_moves_vs_team.append(move_row)
+
+        # For each team member, get their PvP moves and effectiveness vs opponent
+        team_moves_vs_opponent = []
+        for t in team_infos:
+            t_moves = t.get('pvp_moves', [])
+            t_row = {
+                'pokemon': t['name'],
+                'moves': []
+            }
+            for move in t_moves:
+                try:
+                    multiplier, label = get_move_effectiveness(move['type'], opponent_types)
+                    t_row['moves'].append({
+                        'move': move,
+                        'effectiveness': {'multiplier': multiplier, 'label': label}
+                    })
+                except Exception as move_error:
+                    print(f"DEBUG: Error calculating move effectiveness for {move['type']} vs {opponent_types}: {move_error}")
+                    t_row['moves'].append({
+                        'move': move,
+                        'effectiveness': {'multiplier': 1.0, 'label': 'Neutral'}
+                    })
+            team_moves_vs_opponent.append(t_row)
+
+        return jsonify({
+            'opponent': opponent_name,
+            'team': team,
+            'opponent_moves_vs_team': opponent_moves_vs_team,
+            'team_moves_vs_opponent': team_moves_vs_opponent
+        })
+        
+    except Exception as e:
+        print(f"ERROR in matchup: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
 
 battle_simulator = BattleSimulator(poke_data)
 
