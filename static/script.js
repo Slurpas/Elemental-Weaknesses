@@ -205,35 +205,78 @@ function displayMoves(pvpMoves, pokemonTypes = [], isOpponent = false) {
         html += `<div class="moves-pvp-header">Top PvP Moves</div>`;
         html += `<div class="moves-list-pvp">`;
         html += pvpMoves.map(move => {
-            let effClass = '';
-            if (move.effectiveness) {
-                if (move.effectiveness.label === 'Super Effective') effClass = 'move-eff-super';
-                else if (move.effectiveness.label === 'Not Very Effective') effClass = 'move-eff-notvery';
-                else effClass = 'move-eff-neutral';
-            }
-            // Calculate effective DPE if we have opponent data (only for team Pokémon, not opponent)
-            let effectiveDpeDisplay = '';
-            if (!isOpponent && move.dpe && move.move_class === 'charged' && currentOpponent) {
-                const baseDpe = parseFloat(move.dpe);
-                const effectiveDpe = parseFloat(calculateEffectiveDPE(move, currentOpponent, pokemonTypes));
-                if (effectiveDpe !== baseDpe) {
-                    const modifier = effectiveDpe - baseDpe;
-                    const modifierSign = modifier > 0 ? '+' : '';
-                    effectiveDpeDisplay = `<span class="move-effective-dpe">(${effectiveDpe.toFixed(2)} ${modifierSign}${modifier.toFixed(2)} vs ${currentOpponent.name})</span>`;
+            // For opponent moves, show charge move details instead of effectiveness
+            if (isOpponent) {
+                let chargeDetails = '';
+                if (move.move_class === 'charged' && move.power && move.energy) {
+                    // Calculate turns to charge (assuming 1 energy per turn from fast move)
+                    const turnsToCharge = Math.ceil(move.energy);
+                    const damagePerTurn = (move.power / turnsToCharge).toFixed(1);
+                    chargeDetails = `<span class="move-charge-details">${turnsToCharge}t charge, ${move.power} damage (${damagePerTurn}/turn)</span>`;
+                } else if (move.move_class === 'fast' && move.power && move.energyGain) {
+                    chargeDetails = `<span class="move-charge-details">${move.power} damage, +${move.energyGain} energy</span>`;
                 }
-            }
-            
-            return `
-            <div class="move-item">
-                <div class="move-info">
-                    <span class="move-name">${move.name}</span>
-                    <span class="type-badge type-${move.type}">${move.type}</span>
-                    <span class="move-type">(${move.move_class === 'fast' ? 'Fast Move' : 'Charged Move'})</span>
-                    ${!isOpponent && move.dpe ? `<span class="move-dpe">DPE: ${move.dpe}${effectiveDpeDisplay}</span>` : ''}
-                    <span class="move-effectiveness ${effClass}">${move.effectiveness ? move.effectiveness.label : ''}</span>
+                
+                return `
+                <div class="move-item">
+                    <div class="move-info">
+                        <span class="move-name">${move.name}</span>
+                        <span class="type-badge type-${move.type}">${move.type}</span>
+                        <span class="move-type">(${move.move_class === 'fast' ? 'Fast Move' : 'Charged Move'})</span>
+                        ${chargeDetails}
+                    </div>
                 </div>
-            </div>
-            `;
+                `;
+            } else {
+                // For team Pokémon, show effectiveness and DPE
+                let effClass = '';
+                if (move.effectiveness) {
+                    if (move.effectiveness.label === 'Super Effective') effClass = 'move-eff-super';
+                    else if (move.effectiveness.label === 'Not Very Effective') effClass = 'move-eff-notvery';
+                    else effClass = 'move-eff-neutral';
+                }
+                
+                // Calculate effective DPE if we have opponent data
+                let effectiveDpeDisplay = '';
+                if (move.dpe && move.move_class === 'charged' && currentOpponent) {
+                    const baseDpe = parseFloat(move.dpe);
+                    const effectiveDpe = parseFloat(calculateEffectiveDPE(move, currentOpponent, pokemonTypes));
+                    if (effectiveDpe !== baseDpe) {
+                        const modifier = effectiveDpe - baseDpe;
+                        const modifierSign = modifier > 0 ? '+' : '';
+                        
+                        // Calculate type effectiveness multiplier
+                        const effectivenessMultiplier = effectiveDpe / baseDpe;
+                        let effectivenessClass = '';
+                        
+                        if (effectivenessMultiplier >= 2.0) {
+                            effectivenessClass = 'dpe-super-effective';
+                        } else if (effectivenessMultiplier >= 1.5) {
+                            effectivenessClass = 'dpe-effective';
+                        } else if (effectivenessMultiplier <= 0.25) {
+                            effectivenessClass = 'dpe-double-resisted';
+                        } else if (effectivenessMultiplier < 1.0) {
+                            effectivenessClass = 'dpe-resisted';
+                        } else {
+                            effectivenessClass = 'dpe-neutral';
+                        }
+                        
+                        effectiveDpeDisplay = `<span class="move-effective-dpe ${effectivenessClass}">(${baseDpe.toFixed(2)} ${modifierSign}${modifier.toFixed(2)} vs ${currentOpponent.name})</span>`;
+                    }
+                }
+                
+                return `
+                <div class="move-item">
+                    <div class="move-info">
+                        <span class="move-name">${move.name}</span>
+                        <span class="type-badge type-${move.type}">${move.type}</span>
+                        <span class="move-type">(${move.move_class === 'fast' ? 'Fast Move' : 'Charged Move'})</span>
+                        ${move.dpe ? `<span class="move-dpe">DPE: ${currentOpponent && move.move_class === 'charged' ? parseFloat(calculateEffectiveDPE(move, currentOpponent, pokemonTypes)).toFixed(2) : move.dpe}${effectiveDpeDisplay}</span>` : (move.move_class === 'charged' && move.power && move.energy) ? `<span class="move-dpe">DPE: ${currentOpponent ? parseFloat(calculateEffectiveDPE(move, currentOpponent, pokemonTypes)).toFixed(2) : (move.power / move.energy).toFixed(2)}${effectiveDpeDisplay}</span>` : ''}
+                        <span class="move-effectiveness ${effClass}">${move.effectiveness ? move.effectiveness.label : ''}</span>
+                    </div>
+                </div>
+                `;
+            }
         }).join('');
         html += `</div>`;
     } else {
@@ -1052,6 +1095,13 @@ style.textContent = `
         margin-left: 4px;
         font-weight: bold;
     }
+    
+    .move-charge-details {
+        font-size: 0.85em;
+        color: #666;
+        font-style: italic;
+        margin-left: 8px;
+    }
 `;
 document.head.appendChild(style);
 
@@ -1224,14 +1274,17 @@ function renderOpponentMovesVsTeam(opponentMovesVsTeam, teamNames) {
     if (!opponentMovesVsTeam || opponentMovesVsTeam.length === 0) {
         html = '<div class="no-data">No matchup data</div>';
     } else {
-        html += `<table class="matchup-table"><thead><tr><th>Opponent Move</th>`;
-        teamNames.forEach(name => {
-            html += `<th>${name}</th>`;
+        html += `<table class="matchup-table"><thead><tr><th>Your Pokémon</th>`;
+        opponentMovesVsTeam.forEach(row => {
+            html += `<th><span class="move-name">${row.move.name}</span><br><span class="type-badge type-${row.move.type}">${row.move.type}</span><br><span class="move-type">(${row.move.move_class})</span></th>`;
         });
         html += `</tr></thead><tbody>`;
-        opponentMovesVsTeam.forEach(row => {
-            html += `<tr><td><span class="move-name">${row.move.name}</span> <span class="type-badge type-${row.move.type}">${row.move.type}</span> <span class="move-type">(${row.move.move_class})</span></td>`;
-            row.vs_team.forEach(cell => {
+        
+        // Create rows for each team member
+        teamNames.forEach((teamName, teamIndex) => {
+            html += `<tr><td><strong>${teamName}</strong></td>`;
+            opponentMovesVsTeam.forEach(row => {
+                const cell = row.vs_team[teamIndex];
                 let effClass = '';
                 if (cell.effectiveness.label === 'Super Effective') effClass = 'move-eff-super';
                 else if (cell.effectiveness.label === 'Not Very Effective') effClass = 'move-eff-notvery';
