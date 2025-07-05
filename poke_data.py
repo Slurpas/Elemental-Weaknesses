@@ -2,43 +2,35 @@ import json
 import os
 from typing import List, Dict, Any, Optional
 
-# Path to the gamemaster.json file
+# Path templates for PvPoke data
 GAMEMASTER_PATH = os.path.join(
     os.path.dirname(__file__), 'pvpoke', 'src', 'data', 'gamemaster.json'
 )
-
-# Path to the moves.json file
 MOVES_PATH = os.path.join(
     os.path.dirname(__file__), 'pvpoke', 'src', 'data', 'gamemaster', 'moves.json'
 )
-
-# Path to the PvPoke Great League rank 1 stats file
-RANK1_PATH = os.path.join(
-    os.path.dirname(__file__), 'pvpoke', 'src', 'data', 'rankings', 'all', 'overall', 'rankings-1500.json'
+RANK1_PATH_TEMPLATE = os.path.join(
+    os.path.dirname(__file__), 'pvpoke', 'src', 'data', 'rankings', 'all', 'overall', 'rankings-{}.json'
 )
 
 class PokeData:
-    def __init__(self, gamemaster_path: str = GAMEMASTER_PATH, moves_path: str = MOVES_PATH, rank1_path: str = RANK1_PATH):
+    def __init__(self, gamemaster_path: str = GAMEMASTER_PATH, moves_path: str = MOVES_PATH, cp_cap: int = 1500):
         with open(gamemaster_path, encoding='utf-8') as f:
             data = json.load(f)
-        # Find the list of Pokémon entries (skip settings/cups)
         self.pokemon = self._extract_pokemon_list(data)
-        
-        # Load move data
         with open(moves_path, encoding='utf-8') as f:
             self.moves = json.load(f)
-        
-        # Create move lookup by ID
         self.moves_by_id = {move['moveId']: move for move in self.moves}
+        # Load rank 1 stats for the selected CP cap
+        self.cp_cap = cp_cap
+        self.rank1_stats = self._load_rank1_stats(self._get_rank1_path(cp_cap))
+        self.rank1_ivs = self._extract_rank1_ivs_from_gamemaster(self.pokemon, cp_cap)
+        print(f"[DEBUG] Loaded PvPoke rank 1 stats for CP cap: {cp_cap}")
 
-        # Load rank 1 stats
-        self.rank1_stats = self._load_rank1_stats(rank1_path)
-        # Load level and IVs for cp1500 from gamemaster.json
-        self.rank1_ivs = self._extract_rank1_ivs_from_gamemaster(self.pokemon)
+    def _get_rank1_path(self, cp_cap: int) -> str:
+        return RANK1_PATH_TEMPLATE.format(cp_cap)
 
     def _extract_pokemon_list(self, data: Dict[str, Any]) -> List[Dict[str, Any]]:
-        # The Pokémon entries are after the initial settings/cups, as a list
-        # Find the first list in the JSON that contains dicts with 'speciesId'
         for key, value in data.items():
             if isinstance(value, list) and len(value) > 0:
                 if isinstance(value[0], dict) and 'speciesId' in value[0]:
@@ -142,8 +134,8 @@ class PokeData:
         }
 
     def _load_rank1_stats(self, path: str) -> Dict[str, Any]:
-        """Load PvPoke rank 1 stats for Great League from rankings-1500.json"""
         if not os.path.exists(path):
+            print(f"[DEBUG] Rank 1 stats file not found for path: {path}")
             return {}
         with open(path, encoding='utf-8') as f:
             data = json.load(f)
@@ -151,7 +143,6 @@ class PokeData:
         for entry in data:
             sid = entry.get('speciesId')
             s = entry.get('stats', {})
-            # Optionally get IVs if present
             ivs = entry.get('ivs', {}) if 'ivs' in entry else {
                 'atk': entry.get('iv_atk', None),
                 'def': entry.get('iv_def', None),
@@ -166,24 +157,23 @@ class PokeData:
             }
         return stats
 
-    def _extract_rank1_ivs_from_gamemaster(self, pokemon_list):
-        """Extract level and IVs for cp1500 from defaultIVs for each Pokémon."""
+    def _extract_rank1_ivs_from_gamemaster(self, pokemon_list, cp_cap: int):
         stats = {}
+        cp_key = f'cp{cp_cap}'
         for p in pokemon_list:
             sid = p.get('speciesId')
             default_ivs = p.get('defaultIVs', {})
-            cp1500 = default_ivs.get('cp1500')
-            if cp1500 and len(cp1500) == 4:
+            cp_entry = default_ivs.get(cp_key)
+            if cp_entry and len(cp_entry) == 4:
                 stats[sid] = {
-                    'level': cp1500[0],
-                    'iv_atk': cp1500[1],
-                    'iv_def': cp1500[2],
-                    'iv_sta': cp1500[3]
+                    'level': cp_entry[0],
+                    'iv_atk': cp_entry[1],
+                    'iv_def': cp_entry[2],
+                    'iv_sta': cp_entry[3]
                 }
         return stats
 
     def get_rank1_stats(self, species_id: str) -> Optional[Dict[str, Any]]:
-        """Get PvPoke rank 1 stats for a given speciesId (Great League), including IVs and level if available."""
         sid = species_id.lower()
         stats = self.rank1_stats.get(sid)
         ivs = self.rank1_ivs.get(sid)

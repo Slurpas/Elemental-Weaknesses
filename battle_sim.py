@@ -3,6 +3,91 @@ import random
 from typing import Dict, Any, List, Optional, Tuple
 from poke_data import PokeData
 
+class ShieldAI:
+    """Intelligent shield decision making for PvP battles"""
+    
+    STRATEGIES = {
+        'never': 'Never shield',
+        'always': 'Always shield charged moves',
+        'smart_20': 'Shield if damage > 20% of current HP',
+        'smart_30': 'Shield if damage > 30% of current HP', 
+        'smart_50': 'Shield if damage > 50% of current HP',
+        'conservative': 'Conservative - shield if damage > 40% of current HP or if low on HP',
+        'aggressive': 'Aggressive - shield if damage > 25% of current HP or if move is super effective',
+        'balanced': 'Balanced - shield if damage > 35% of current HP or if move is super effective'
+    }
+    
+    def __init__(self, strategy: str = 'smart_30'):
+        """
+        Initialize shield AI with a strategy
+        
+        Args:
+            strategy: One of the STRATEGIES keys
+        """
+        if strategy not in self.STRATEGIES:
+            raise ValueError(f"Invalid shield strategy: {strategy}. Valid options: {list(self.STRATEGIES.keys())}")
+        
+        self.strategy = strategy
+    
+    def should_shield(self, damage: int, current_hp: int, max_hp: int, 
+                     move_type: str, defender_types: List[str], 
+                     remaining_shields: int, is_charged_move: bool = True) -> bool:
+        """
+        Decide whether to use a shield
+        
+        Args:
+            damage: Incoming damage
+            current_hp: Current HP of the defender
+            max_hp: Maximum HP of the defender
+            move_type: Type of the incoming move
+            defender_types: Types of the defender
+            remaining_shields: Number of shields left
+            is_charged_move: Whether this is a charged move (always True for shield decisions)
+        
+        Returns:
+            True if should shield, False otherwise
+        """
+        if remaining_shields <= 0 or not is_charged_move:
+            return False
+        
+        # Calculate damage as percentage of current HP
+        damage_percent = (damage / current_hp) * 100 if current_hp > 0 else 0
+        hp_percent = (current_hp / max_hp) * 100 if max_hp > 0 else 0
+        
+        # Check type effectiveness
+        effectiveness = TypeChart.get_effectiveness(move_type, defender_types)
+        is_super_effective = effectiveness > 1.0
+        
+        if self.strategy == 'never':
+            return False
+        
+        elif self.strategy == 'always':
+            return True
+        
+        elif self.strategy == 'smart_20':
+            return damage_percent > 20
+        
+        elif self.strategy == 'smart_30':
+            return damage_percent > 30
+        
+        elif self.strategy == 'smart_50':
+            return damage_percent > 50
+        
+        elif self.strategy == 'conservative':
+            # Shield if damage > 40% of current HP or if low on HP (< 30%) and damage > 20%
+            return damage_percent > 40 or (hp_percent < 30 and damage_percent > 20)
+        
+        elif self.strategy == 'aggressive':
+            # Shield if damage > 25% of current HP or if move is super effective and damage > 15%
+            return damage_percent > 25 or (is_super_effective and damage_percent > 15)
+        
+        elif self.strategy == 'balanced':
+            # Shield if damage > 35% of current HP or if move is super effective and damage > 20%
+            return damage_percent > 35 or (is_super_effective and damage_percent > 20)
+        
+        # Default fallback
+        return damage_percent > 30
+
 class DamageMultiplier:
     """PvPoke damage multipliers"""
     BONUS = 1.2999999523162841796875
@@ -65,6 +150,7 @@ class BattlePokemon:
         self.moves = moves
         self.shields = shields
         self.poke_data = poke_data or PokeData()
+        print(f"[DEBUG] BattlePokemon created: {self.data.get('speciesId', 'unknown')} id={id(self)} shields={self.shields}")
 
         # Use PvPoke rank 1 stats if available
         self.species_id = self.data.get('speciesId') or self.data.get('name', '').lower().replace(' ', '_')
@@ -169,8 +255,11 @@ class BattlePokemon:
     def use_shield(self):
         """Use a shield"""
         if self.shields > 0:
+            old_shields = self.shields
             self.shields -= 1
+            print(f"[DEBUG] {self.data['speciesId']} used shield: {old_shields} -> {self.shields} (id={id(self)})")
             return True
+        print(f"[DEBUG] {self.data['speciesId']} tried to use shield but has {self.shields} shields (id={id(self)})")
         return False
     
     def is_fainted(self) -> bool:
@@ -184,6 +273,9 @@ class BattlePokemon:
 class BattleSimulator:
     def __init__(self, poke_data: PokeData):
         self.poke_data = poke_data
+        # Default shield AI strategies for each player
+        self.p1_shield_ai = ShieldAI('smart_30')
+        self.p2_shield_ai = ShieldAI('smart_30')
 
     def simulate(self, p1_data: Dict[str, Any], p2_data: Dict[str, Any],
                  p1_moves: Dict[str, str], p2_moves: Dict[str, str],
@@ -201,9 +293,22 @@ class BattleSimulator:
         Returns:
             Detailed battle result with winner, timeline, stats, etc.
         """
+        # Get shield AI strategies from settings
+        p1_shield_strategy = settings.get('p1_shield_ai', 'smart_30') if settings else 'smart_30'
+        p2_shield_strategy = settings.get('p2_shield_ai', 'smart_30') if settings else 'smart_30'
+        
+        # Update shield AI strategies
+        self.p1_shield_ai = ShieldAI(p1_shield_strategy)
+        self.p2_shield_ai = ShieldAI(p2_shield_strategy)
+        
         # Initialize battle Pokémon with poke_data for rank 1 stats
         p1 = BattlePokemon(p1_data, p1_moves, p1_shields, poke_data=self.poke_data)
         p2 = BattlePokemon(p2_data, p2_moves, p2_shields, poke_data=self.poke_data)
+        
+        # Store references to determine which player is which
+        self.p1_pokemon = p1
+        self.p2_pokemon = p2
+        print(f"[DEBUG] BattleSimulator: p1 id={id(p1)}, p2 id={id(p2)}")
         
         # Battle state
         turn = 0
@@ -239,6 +344,9 @@ class BattleSimulator:
         # Determine winner and calculate battle rating
         winner, battle_rating = self._determine_winner(p1, p2)
         
+        # Debug: Show final shield counts
+        print(f"[DEBUG] Final shield counts - P1 ({p1.data['speciesId']} id={id(p1)}): {p1.shields}, P2 ({p2.data['speciesId']} id={id(p2)}): {p2.shields}")
+        
         return {
             "winner": winner,
             "p1_final_hp": p1.hp,
@@ -247,6 +355,8 @@ class BattleSimulator:
             "p2_max_hp": p2.max_hp,
             "p1_final_energy": p1.energy,
             "p2_final_energy": p2.energy,
+            "p1_final_shields": p1.shields,
+            "p2_final_shields": p2.shields,
             "turns": turn,
             "timeline": timeline,
             "battle_rating": battle_rating,
@@ -303,13 +413,32 @@ class BattleSimulator:
         # Calculate damage
         damage = self._calculate_damage(attacker, defender, move)
         
-        # Check if defender uses shield
+        # Determine which shield AI to use based on which player is defending
+        if defender is self.p1_pokemon:
+            shield_ai = self.p1_shield_ai
+        elif defender is self.p2_pokemon:
+            shield_ai = self.p2_shield_ai
+        else:
+            # Fallback to p1 strategy if we can't determine
+            shield_ai = self.p1_shield_ai
+        
+        # Check if defender uses shield using intelligent AI
         shield_used = False
         if defender.shields > 0 and damage > 0:
-            # Simple AI: shield if damage is high
-            if damage > defender.hp * 0.3:  # Shield if damage > 30% of current HP
+            should_shield = shield_ai.should_shield(
+                damage=damage,
+                current_hp=defender.hp,
+                max_hp=defender.max_hp,
+                move_type=move["type"],
+                defender_types=defender.data.get("types", []),
+                remaining_shields=defender.shields,
+                is_charged_move=True
+            )
+            
+            if should_shield:
                 shield_used = defender.use_shield()
                 damage = 0
+                print(f"[DEBUG] {defender.data['speciesId']} used shield (strategy: {shield_ai.strategy})")
         
         # Apply damage
         if not shield_used:
@@ -340,7 +469,8 @@ class BattleSimulator:
             "energy_used": move["energy"],
             "defender_hp_remaining": defender.hp,
             "attacker_energy": attacker.energy,
-            "buff_applied": buff_applied
+            "buff_applied": buff_applied,
+            "shield_strategy": shield_ai.strategy if shield_used else None
         }
     
     def _calculate_damage(self, attacker: BattlePokemon, defender: BattlePokemon, move: Dict[str, Any]) -> int:

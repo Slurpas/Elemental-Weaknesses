@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shield AI Frontend Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        .strategy-selectors {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 10px;
+        }
+        .strategy-selector {
+            flex: 1;
+        }
+        .strategy-selector label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        .strategy-dropdown {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .test-result {
+            margin-top: 10px;
+            padding: 10px;
+            background: #f0f0f0;
+            border-radius: 4px;
+        }
+        button {
+            padding: 10px 20px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <h1>Shield AI Frontend Integration Test</h1>
+    
+    <div class="test-section">
+        <h2>Shield AI Strategy Selectors</h2>
+        <div class="strategy-selectors">
+            <div class="strategy-selector">
+                <label for="p1ShieldAI">Your Team Strategy:</label>
+                <select id="p1ShieldAI" class="strategy-dropdown">
+                    <option value="smart_30">Smart (30% damage)</option>
+                    <option value="smart_20">Aggressive (20% damage)</option>
+                    <option value="smart_50">Conservative (50% damage)</option>
+                    <option value="balanced">Balanced</option>
+                    <option value="conservative">Very Conservative</option>
+                    <option value="aggressive">Very Aggressive</option>
+                    <option value="always">Always Shield</option>
+                    <option value="never">Never Shield</option>
+                </select>
+            </div>
+            <div class="strategy-selector">
+                <label for="p2ShieldAI">Opponent Strategy:</label>
+                <select id="p2ShieldAI" class="strategy-dropdown">
+                    <option value="smart_30">Smart (30% damage)</option>
+                    <option value="smart_20">Aggressive (20% damage)</option>
+                    <option value="smart_50">Conservative (50% damage)</option>
+                    <option value="balanced">Balanced</option>
+                    <option value="conservative">Very Conservative</option>
+                    <option value="aggressive">Very Aggressive</option>
+                    <option value="always">Always Shield</option>
+                    <option value="never">Never Shield</option>
+                </select>
+            </div>
+        </div>
+        <div class="strategy-info">
+            <small>💡 <strong>Smart:</strong> Shields when damage > threshold. <strong>Balanced:</strong> Considers type effectiveness. <strong>Conservative/Aggressive:</strong> Adjusts thresholds based on playstyle.</small>
+        </div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Test Battle Simulation</h2>
+        <p>This will test the shield AI integration with the backend API.</p>
+        <button onclick="testBattleSimulation()">Run Test Battle</button>
+        <div id="testResult" class="test-result" style="display: none;"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Current Strategy Values</h2>
+        <div id="currentValues"></div>
+    </div>
+
+    <script>
+        // Initialize shield AI selectors
+        let battleSimulationState = {
+            p1ShieldAI: 'smart_30',
+            p2ShieldAI: 'smart_30'
+        };
+        
+        function initShieldAISelectors() {
+            const p1ShieldAI = document.getElementById('p1ShieldAI');
+            const p2ShieldAI = document.getElementById('p2ShieldAI');
+            
+            if (p1ShieldAI && p2ShieldAI) {
+                // Set initial values
+                p1ShieldAI.value = battleSimulationState.p1ShieldAI;
+                p2ShieldAI.value = battleSimulationState.p2ShieldAI;
+                
+                // Add event listeners
+                p1ShieldAI.addEventListener('change', function() {
+                    battleSimulationState.p1ShieldAI = this.value;
+                    console.log('P1 Shield AI changed to:', this.value);
+                    updateCurrentValues();
+                });
+                
+                p2ShieldAI.addEventListener('change', function() {
+                    battleSimulationState.p2ShieldAI = this.value;
+                    console.log('P2 Shield AI changed to:', this.value);
+                    updateCurrentValues();
+                });
+                
+                updateCurrentValues();
+            }
+        }
+        
+        function updateCurrentValues() {
+            const currentValues = document.getElementById('currentValues');
+            currentValues.innerHTML = `
+                <p><strong>P1 Strategy:</strong> ${battleSimulationState.p1ShieldAI}</p>
+                <p><strong>P2 Strategy:</strong> ${battleSimulationState.p2ShieldAI}</p>
+            `;
+        }
+        
+        async function testBattleSimulation() {
+            const testResult = document.getElementById('testResult');
+            testResult.style.display = 'block';
+            testResult.innerHTML = '<p>Running test battle...</p>';
+            
+            try {
+                // Test battle data
+                const battleData = {
+                    p1_id: "azumarill",
+                    p2_id: "altaria",
+                    p1_moves: {
+                        fast: "BUBBLE",
+                        charged1: "ICE_BEAM",
+                        charged2: "HYDRO_PUMP"
+                    },
+                    p2_moves: {
+                        fast: "DRAGON_BREATH",
+                        charged1: "SKY_ATTACK",
+                        charged2: "DRAGON_PULSE"
+                    },
+                    p1_shields: 2,
+                    p2_shields: 2,
+                    p1_shield_ai: battleSimulationState.p1ShieldAI,
+                    p2_shield_ai: battleSimulationState.p2ShieldAI,
+                    cp_cap: 1500
+                };
+                
+                const response = await fetch('http://localhost:5000/api/battle', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(battleData)
+                });
+                
+                const result = await response.json();
+                
+                if (result.error) {
+                    testResult.innerHTML = `<p style="color: red;">❌ Error: ${result.error}</p>`;
+                } else {
+                    testResult.innerHTML = `
+                        <p style="color: green;">✅ Battle simulation successful!</p>
+                        <p><strong>Winner:</strong> ${result.winner}</p>
+                        <p><strong>Battle Rating:</strong> ${result.battle_rating.toFixed(2)}</p>
+                        <p><strong>P1 Shield AI:</strong> ${result.p1_shield_ai}</p>
+                        <p><strong>P2 Shield AI:</strong> ${result.p2_shield_ai}</p>
+                        <p><strong>Turns:</strong> ${result.turns}</p>
+                    `;
+                }
+            } catch (error) {
+                testResult.innerHTML = `<p style="color: red;">❌ Error: ${error.message}</p>`;
+            }
+        }
+        
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            initShieldAISelectors();
+        });
+    </script>
+</body>
+</html> 

@@ -11,8 +11,16 @@
 <body>
     <div class="container">
         <header>
-            <h1>Pokemon PvP Analyzer</h1>
-            <p>Get weaknesses, resistances, moves, and battle simulations for any Pokemon</p>
+            <div class="header-content">
+                <div class="header-text">
+                    <h1>Pokemon PvP Analyzer</h1>
+                    <p>Get weaknesses, resistances, moves, and battle simulations for any Pokemon</p>
+                </div>
+                <button id="helpBtn" class="help-button" title="Help & Guide">
+                    <span class="help-icon">?</span>
+                    <span class="help-text">Help</span>
+                </button>
+            </div>
         </header>
 
         <div class="main-content">
@@ -74,6 +82,39 @@
                         </div>
                     </div>
                     
+                    <!-- Shield AI Strategy Selector -->
+                    <div class="shield-ai-selector">
+                        <h4>Shield AI Strategies</h4>
+                        <div class="strategy-selectors">
+                            <div class="strategy-selector">
+                                <label for="p1ShieldAI">Your Team Strategy:</label>
+                                <select id="p1ShieldAI" class="strategy-dropdown">
+                                    <option value="smart_30">Smart (30% damage)</option>
+                                    <option value="smart_20">Aggressive (20% damage)</option>
+                                    <option value="smart_50">Conservative (50% damage)</option>
+                                    <option value="balanced">Balanced</option>
+                                    <option value="conservative">Very Conservative</option>
+                                    <option value="aggressive">Very Aggressive</option>
+                                    <option value="always">Always Shield</option>
+                                    <option value="never">Never Shield</option>
+                                </select>
+                            </div>
+                            <div class="strategy-selector">
+                                <label for="p2ShieldAI">Opponent Strategy:</label>
+                                <select id="p2ShieldAI" class="strategy-dropdown">
+                                    <option value="smart_30">Smart (30% damage)</option>
+                                    <option value="smart_20">Aggressive (20% damage)</option>
+                                    <option value="smart_50">Conservative (50% damage)</option>
+                                    <option value="balanced">Balanced</option>
+                                    <option value="conservative">Very Conservative</option>
+                                    <option value="aggressive">Very Aggressive</option>
+                                    <option value="always">Always Shield</option>
+                                    <option value="never">Never Shield</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <div class="team-slots">
                         <div class="team-slot" data-slot="1">
                             <div class="slot-content">
@@ -132,6 +173,132 @@
             </div>
         </div>
 
+        <!-- Help Modal -->
+        <div id="helpModal" class="modal hidden">
+            <div class="modal-content help-modal-content">
+                <button class="modal-close" id="closeHelpModal">×</button>
+                <div class="help-header">
+                    <h2>Pokemon PvP Analyzer - Help & Guide</h2>
+                    <p>Learn how to use all the features of this PvP battle simulator</p>
+                </div>
+                
+                <div class="help-content">
+                    <div class="help-section">
+                        <h3>🎯 Getting Started</h3>
+                        <div class="help-item">
+                            <h4>Search for Pokemon</h4>
+                            <p>Use the search bar on the left to find any Pokemon. Type the name and select from the dropdown results. The Pokemon's stats, moves, and type effectiveness will be displayed.</p>
+                        </div>
+                        
+                        <div class="help-item">
+                            <h4>Build Your Team</h4>
+                            <p>Click the "+" buttons in the "Your Team" section to add Pokemon to your team. You can add up to 3 Pokemon for team analysis and battle simulations.</p>
+                        </div>
+                    </div>
+
+                    <div class="help-section">
+                        <h3>⚔️ Battle Simulations</h3>
+                        <div class="help-item">
+                            <h4>League Selection</h4>
+                            <p>Choose your CP cap for battle simulations:</p>
+                            <ul>
+                                <li><strong>500 CP:</strong> Little Cup format</li>
+                                <li><strong>1500 CP:</strong> Great League format</li>
+                                <li><strong>2500 CP:</strong> Ultra League format</li>
+                            </ul>
+                        </div>
+                        
+                        <div class="help-item">
+                            <h4>Shield Management</h4>
+                            <p>Use the shield slider to set how many shields each player has (0-2). This affects battle outcomes significantly.</p>
+                        </div>
+                    </div>
+
+                    <div class="help-section">
+                        <h3>🛡️ Shield AI Strategies</h3>
+                        <p>Choose how the AI decides when to use shields during battles:</p>
+                        
+                        <div class="strategy-grid">
+                            <div class="strategy-card">
+                                <h4>Smart Strategies</h4>
+                                <ul>
+                                    <li><strong>Smart (30%):</strong> Shields when incoming damage exceeds 30% of max HP</li>
+                                    <li><strong>Aggressive (20%):</strong> Shields when damage > 20% of max HP</li>
+                                    <li><strong>Conservative (50%):</strong> Shields when damage > 50% of max HP</li>
+                                </ul>
+                            </div>
+                            
+                            <div class="strategy-card">
+                                <h4>Advanced Strategies</h4>
+                                <ul>
+                                    <li><strong>Balanced:</strong> Considers type effectiveness and opponent's energy</li>
+                                    <li><strong>Very Conservative:</strong> Saves shields for high-damage moves</li>
+                                    <li><strong>Very Aggressive:</strong> Uses shields early to maintain pressure</li>
+                                </ul>
+                            </div>
+                            
+                            <div class="strategy-card">
+                                <h4>Simple Strategies</h4>
+                                <ul>
+                                    <li><strong>Always Shield:</strong> Uses shields whenever available</li>
+                                    <li><strong>Never Shield:</strong> Never uses shields</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="help-section">
+                        <h3>📊 Understanding Results</h3>
+                        <div class="help-item">
+                            <h4>Battle Rating</h4>
+                            <p>The battle rating shows how well your Pokemon performs:</p>
+                            <ul>
+                                <li><strong>0.9+ (Excellent):</strong> Dominant win</li>
+                                <li><strong>0.7-0.9 (Good):</strong> Comfortable win</li>
+                                <li><strong>0.5-0.7 (Close):</strong> Narrow win</li>
+                                <li><strong>0.3-0.5 (Neutral):</strong> Close loss</li>
+                                <li><strong>0.1-0.3 (Bad):</strong> Significant loss</li>
+                                <li><strong>0.0-0.1 (Terrible):</strong> Complete loss</li>
+                            </ul>
+                        </div>
+                        
+                        <div class="help-item">
+                            <h4>Type Effectiveness</h4>
+                            <p>Colors indicate move effectiveness:</p>
+                            <ul>
+                                <li><span class="type-badge type-fire">Red</span> Super effective (2x damage)</li>
+                                <li><span class="type-badge type-normal">Gray</span> Normal effectiveness (1x damage)</li>
+                                <li><span class="type-badge type-steel">Blue</span> Not very effective (0.5x damage)</li>
+                                <li><span class="type-badge type-ghost">Purple</span> Immune (0x damage)</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="help-section">
+                        <h3>🔧 Tips & Tricks</h3>
+                        <div class="help-item">
+                            <h4>Team Building</h4>
+                            <ul>
+                                <li>Check type coverage to ensure you can handle different threats</li>
+                                <li>Consider shield usage patterns when choosing moves</li>
+                                <li>Test your team against common meta Pokemon</li>
+                                <li>Balance fast and charged move energy costs</li>
+                            </ul>
+                        </div>
+                        
+                        <div class="help-item">
+                            <h4>Battle Strategy</h4>
+                            <ul>
+                                <li>Use shield AI strategies that match your playstyle</li>
+                                <li>Consider energy management and move timing</li>
+                                <li>Test different shield scenarios (0, 1, or 2 shields)</li>
+                                <li>Analyze battle timelines to understand key moments</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
 
     </div>
 

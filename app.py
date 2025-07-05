@@ -27,30 +27,75 @@ pokemon_cache = {}
 type_cache = {}  # Cache for type effectiveness data
 cache_duration = timedelta(hours=1)
 
-# --- CSV Parsing for PvP Rankings ---
-pvp_moves_by_name = {}
+# --- PvPoke Rankings Data Loading ---
+pvp_rankings_by_species = {}
 
-def load_pvp_csv():
-    global pvp_moves_by_name
+def load_pvp_rankings(cp_cap=1500):
+    """Load PvPoke rankings data for the specified CP cap"""
+    global pvp_rankings_by_species
+    try:
+        # Use the rankings file for the specified CP cap
+        rankings_path = f'pvpoke/src/data/rankings/all/overall/rankings-{cp_cap}.json'
+        print(f"[DEBUG] Loading PvP rankings for CP cap {cp_cap} from {rankings_path}")
+        
+        with open(rankings_path, encoding='utf-8') as f:
+            rankings_data = json.load(f)
+            
+        # Index by speciesId for fast lookup
+        for pokemon in rankings_data:
+            species_id = pokemon['speciesId']
+            pvp_rankings_by_species[species_id] = {
+                'speciesName': pokemon['speciesName'],
+                'rating': pokemon.get('rating', 0),
+                'score': pokemon.get('score', 0),
+                'moves': pokemon.get('moves', {}),
+                'moveset': pokemon.get('moveset', []),
+                'stats': pokemon.get('stats', {}),
+                'matchups': pokemon.get('matchups', []),
+                'counters': pokemon.get('counters', [])
+            }
+            
+        print(f"[DEBUG] Loaded {len(pvp_rankings_by_species)} Pokemon from PvPoke rankings for CP {cp_cap}")
+        
+    except Exception as e:
+        print(f"Error loading PvPoke rankings for CP {cp_cap}: {e}")
+        # Fallback to CSV if PvPoke data is not available
+        load_pvp_csv_fallback()
+
+def load_pvp_csv_fallback():
+    """Fallback to CSV loading if PvPoke data is not available"""
+    global pvp_rankings_by_species
     try:
         with open('cp1500_all_overall_rankings.csv', encoding='utf-8') as f:
             reader = csv.DictReader(f)
             for row in reader:
                 # Normalize name for lookup (lowercase, remove spaces, handle forms)
                 name = row['Pokemon'].strip().lower().replace(' (galarian)', '-galar').replace(' (alolan)', '-alola').replace(' (shadow)', '-shadow').replace(' (hisuian)', '-hisui').replace(' ', '').replace("(", '').replace(")", '')
-                pvp_moves_by_name[name] = {
+                pvp_rankings_by_species[name] = {
+                    'speciesName': row['Pokemon'],
                     'score': row['Score'],
-                    'type_1': row['Type 1'],
-                    'type_2': row['Type 2'],
-                    'fast_move': row['Fast Move'],
-                    'charged_move_1': row['Charged Move 1'],
-                    'charged_move_2': row['Charged Move 2'],
+                    'moveset': [row['Fast Move'], row['Charged Move 1'], row['Charged Move 2']],
+                    'moves': {
+                        'fastMoves': [{'moveId': row['Fast Move'], 'uses': 100000}],
+                        'chargedMoves': [
+                            {'moveId': row['Charged Move 1'], 'uses': 50000},
+                            {'moveId': row['Charged Move 2'], 'uses': 50000}
+                        ]
+                    }
                 }
+        print(f"[DEBUG] Loaded {len(pvp_rankings_by_species)} Pokemon from CSV fallback")
     except Exception as e:
-        print(f"Error loading PvP CSV: {e}")
+        print(f"Error loading PvP CSV fallback: {e}")
 
-# Call at startup
-load_pvp_csv()
+# Call at startup - load Great League (1500 CP) by default
+load_pvp_rankings(1500)
+
+def reload_pvp_rankings_for_cap(cp_cap):
+    """Reload PvP rankings for a different CP cap"""
+    global pvp_rankings_by_species
+    pvp_rankings_by_species.clear()  # Clear existing data
+    load_pvp_rankings(cp_cap)
+    print(f"[DEBUG] Reloaded PvP rankings for CP cap {cp_cap}")
 
 # Security: Input validation and sanitization functions
 def sanitize_input(input_str):
@@ -112,64 +157,109 @@ def get_move_type_and_class(move_name):
     return None, None
 
 def get_pvp_moves_for_pokemon(name):
+    """Get PvP moves for a Pokemon from PvPoke rankings data"""
     # Try direct match, then try removing dashes/spaces, then fallback
     key = name.lower().replace(' ', '').replace('_', '-').replace('.', '').replace("'", "").replace('é', 'e')
     
-    # Handle special cases for form names - match the CSV loading format
+    # Handle special cases for form names - match the PvPoke speciesId format
     if '(galarian)' in name.lower():
-        key = key.replace('(galarian)', '-galar')
+        key = key.replace('(galarian)', '_galarian')
     elif '(alolan)' in name.lower():
-        key = key.replace('(alolan)', '-alola')
+        key = key.replace('(alolan)', '_alolan')
     elif '(hisuian)' in name.lower():
-        key = key.replace('(hisuian)', '-hisui')
+        key = key.replace('(hisuian)', '_hisuian')
     elif '(shadow)' in name.lower():
-        key = key.replace('(shadow)', '-shadow')
+        key = key.replace('(shadow)', '_shadow')
     else:
         # Fallback for other formats
         if 'galarian' in key:
-            key = key.replace('galarian', 'galar')
+            key = key.replace('galarian', '_galarian')
         if 'alolan' in key:
-            key = key.replace('alolan', 'alola')
+            key = key.replace('alolan', '_alolan')
         if 'hisuian' in key:
-            key = key.replace('hisuian', 'hisui')
+            key = key.replace('hisuian', '_hisuian')
     
-    if key in pvp_moves_by_name:
-        row = pvp_moves_by_name[key]
+    # Try to find the Pokemon in PvPoke rankings
+    if key in pvp_rankings_by_species:
+        row = pvp_rankings_by_species[key]
     else:
-        for k in pvp_moves_by_name:
-            if key in k:
-                row = pvp_moves_by_name[k]
+        # Try partial matches
+        for k in pvp_rankings_by_species:
+            if key in k or k in key:
+                row = pvp_rankings_by_species[k]
                 break
         else:
             return []
+    
     moves = []
-    for move_name, move_class in [
-        (row['fast_move'], 'fast'),
-        (row['charged_move_1'], 'charged'),
-        (row['charged_move_2'], 'charged')
-    ]:
-        if move_name and move_name.lower() != 'none':
-            # Get move type from moves.json
-            move_id = move_name.upper().replace(' ', '_')
+    
+    # Get moves from PvPoke data
+    if 'moves' in row and 'fastMoves' in row['moves'] and 'chargedMoves' in row['moves']:
+        # Add fast moves (use the most popular one)
+        if row['moves']['fastMoves']:
+            fast_move = row['moves']['fastMoves'][0]['moveId']
+            move_details = poke_data.get_move_details(fast_move)
+            move_type = move_details.get('type', '') if move_details else ''
+            
+            moves.append({
+                'name': fast_move,
+                'type': move_type,
+                'move_class': 'fast',
+                'dpe': None,
+                'power': move_details.get('power', 0) if move_details else 0,
+                'energy': move_details.get('energy', 0) if move_details else 0
+            })
+        
+        # Add charged moves (use the most popular ones)
+        for i, charged_move in enumerate(row['moves']['chargedMoves'][:2]):  # Top 2 charged moves
+            move_id = charged_move['moveId']
             move_details = poke_data.get_move_details(move_id)
             move_type = move_details.get('type', '') if move_details else ''
             
             # Calculate DPE for charge moves
             dpe = None
-            if move_class == 'charged' and move_details:
+            if move_details:
                 power = move_details.get('power', 0)
                 energy = move_details.get('energy', 0)
                 if energy > 0:
                     dpe = round(power / energy, 2)
             
             moves.append({
-                'name': move_name,
+                'name': move_id,
                 'type': move_type,
-                'move_class': move_class,
+                'move_class': 'charged',
                 'dpe': dpe,
                 'power': move_details.get('power', 0) if move_details else 0,
                 'energy': move_details.get('energy', 0) if move_details else 0
             })
+    
+    # Fallback to moveset if moves data is not available
+    elif 'moveset' in row and row['moveset']:
+        for i, move_name in enumerate(row['moveset']):
+            if move_name and move_name.lower() != 'none':
+                move_details = poke_data.get_move_details(move_name)
+                move_type = move_details.get('type', '') if move_details else ''
+                
+                # Determine move class (first is fast, rest are charged)
+                move_class = 'fast' if i == 0 else 'charged'
+                
+                # Calculate DPE for charge moves
+                dpe = None
+                if move_class == 'charged' and move_details:
+                    power = move_details.get('power', 0)
+                    energy = move_details.get('energy', 0)
+                    if energy > 0:
+                        dpe = round(power / energy, 2)
+                
+                moves.append({
+                    'name': move_name,
+                    'type': move_type,
+                    'move_class': move_class,
+                    'dpe': dpe,
+                    'power': move_details.get('power', 0) if move_details else 0,
+                    'energy': move_details.get('energy', 0) if move_details else 0
+                })
+    
     return moves
 
 def get_cached_pokemon(name):
@@ -491,8 +581,10 @@ def matchup():
         
         # Get opponent data directly from poke_data
         opponent_data = poke_data.get_by_species_id(opponent_name)
+        print(f"DEBUG: Opponent data for {opponent_name}: {opponent_data}")
         if not opponent_data:
             opponent_data = poke_data.get_by_name(opponent_name)
+            print(f"DEBUG: (Fallback) Opponent data for {opponent_name}: {opponent_data}")
         if not opponent_data:
             return jsonify({'error': f'Opponent not found: {opponent_name}'}), 404
         
@@ -501,33 +593,37 @@ def matchup():
         
         # Get opponent moves
         opponent_moves = poke_data.get_pokemon_moves(opponent_data['speciesId'])
+        print(f"DEBUG: Opponent moves for {opponent_data['speciesId']}: {opponent_moves}")
         opponent_pvp_moves = []
-        for move in opponent_moves.get('fastMoves', []) + opponent_moves.get('chargedMoves', []):
+        for move in opponent_moves.get('fast_moves', []) + opponent_moves.get('charged_moves', []):
             opponent_pvp_moves.append({
                 'name': move['name'],
                 'type': move['type'],
-                'move_class': 'fast' if move in opponent_moves.get('fastMoves', []) else 'charged',
+                'move_class': 'fast' if move in opponent_moves.get('fast_moves', []) else 'charged',
                 'power': move.get('power'),
                 'energy': move.get('energy'),
                 'energyGain': move.get('energyGain')
             })
         
-        print(f"DEBUG: Opponent moves: {len(opponent_moves.get('fastMoves', []))} fast, {len(opponent_moves.get('chargedMoves', []))} charged")
+        print(f"DEBUG: Opponent moves: {len(opponent_moves.get('fast_moves', []))} fast, {len(opponent_moves.get('charged_moves', []))} charged")
 
         # Get team info directly from poke_data
         team_infos = []
         for name in team:
             team_data = poke_data.get_by_species_id(name)
+            print(f"DEBUG: Team data for {name}: {team_data}")
             if not team_data:
                 team_data = poke_data.get_by_name(name)
+                print(f"DEBUG: (Fallback) Team data for {name}: {team_data}")
             if team_data:
                 team_moves = poke_data.get_pokemon_moves(team_data['speciesId'])
+                print(f"DEBUG: Team moves for {team_data['speciesId']}: {team_moves}")
                 pvp_moves = []
-                for move in team_moves.get('fastMoves', []) + team_moves.get('chargedMoves', []):
+                for move in team_moves.get('fast_moves', []) + team_moves.get('charged_moves', []):
                     pvp_moves.append({
                         'name': move['name'],
                         'type': move['type'],
-                        'move_class': 'fast' if move in team_moves.get('fastMoves', []) else 'charged',
+                        'move_class': 'fast' if move in team_moves.get('fast_moves', []) else 'charged',
                         'power': move.get('power'),
                         'energy': move.get('energy'),
                         'energyGain': move.get('energyGain')
@@ -616,11 +712,25 @@ def api_battle():
         p2_moves = data.get('p2_moves')
         p1_shields = data.get('p1_shields', 2)
         p2_shields = data.get('p2_shields', 2)
+        p1_shield_ai = data.get('p1_shield_ai', 'smart_30')  # Default shield AI strategy
+        p2_shield_ai = data.get('p2_shield_ai', 'smart_30')  # Default shield AI strategy
         settings = data.get('settings', {})
+        cp_cap = data.get('cp_cap', 1500)  # Default to Great League
         
         # Validate input
         if not p1_id or not p2_id or not p1_moves or not p2_moves:
             return jsonify({'error': 'Missing required parameters'}), 400
+        
+        # Validate CP cap
+        if cp_cap not in [500, 1500, 2500]:
+            return jsonify({'error': 'Invalid CP cap. Supported values: 500, 1500, 2500'}), 400
+        
+        # Validate shield AI strategies
+        valid_shield_strategies = ['never', 'always', 'smart_20', 'smart_30', 'smart_50', 'conservative', 'aggressive', 'balanced']
+        if p1_shield_ai not in valid_shield_strategies:
+            return jsonify({'error': f'Invalid p1_shield_ai strategy. Supported values: {valid_shield_strategies}'}), 400
+        if p2_shield_ai not in valid_shield_strategies:
+            return jsonify({'error': f'Invalid p2_shield_ai strategy. Supported values: {valid_shield_strategies}'}), 400
         
         # Get Pokémon data
         p1 = poke_data.get_by_species_id(p1_id)
@@ -639,7 +749,14 @@ def api_battle():
         if not _validate_moveset(p2_moves, p2_available_moves):
             return jsonify({'error': f'Invalid moveset for {p2_id}'}), 400
         
+        # Update settings with shield AI strategies
+        battle_settings = settings.copy()
+        battle_settings['p1_shield_ai'] = p1_shield_ai
+        battle_settings['p2_shield_ai'] = p2_shield_ai
+        
         # Run battle simulation
+        print(f"[DEBUG] Running battle simulation for CP cap: {cp_cap}")
+        print(f"[DEBUG] P1 shield AI: {p1_shield_ai}, P2 shield AI: {p2_shield_ai}")
         result = battle_simulator.simulate(
             p1_data=p1,
             p2_data=p2,
@@ -647,14 +764,17 @@ def api_battle():
             p2_moves=p2_moves,
             p1_shields=p1_shields,
             p2_shields=p2_shields,
-            settings=settings
+            settings=battle_settings
         )
         
-        # Add Pokémon names to result for frontend
+        # Add Pokémon names, CP cap, and shield AI strategies to result for frontend
         result['p1_name'] = p1['speciesName']
         result['p2_name'] = p2['speciesName']
         result['p1_species_id'] = p1['speciesId']
         result['p2_species_id'] = p2['speciesId']
+        result['cp_cap'] = cp_cap
+        result['p1_shield_ai'] = p1_shield_ai
+        result['p2_shield_ai'] = p2_shield_ai
         
         return jsonify(result)
         
@@ -734,6 +854,47 @@ def get_pokemon_moves(name):
             return jsonify({'error': f'Failed to get moves: {str(e)}'}), 500
         else:
             return jsonify({'error': 'Failed to get moves'}), 500
+
+@app.route('/api/shield-strategies')
+def get_shield_strategies():
+    """Get available shield AI strategies"""
+    from battle_sim import ShieldAI
+    return jsonify({
+        'strategies': ShieldAI.STRATEGIES,
+        'default': 'smart_30'
+    })
+
+@app.route('/api/league/<cp_cap>', methods=['POST'])
+def change_league(cp_cap):
+    """API endpoint to change the CP cap/league and reload PvP data"""
+    try:
+        # Validate CP cap
+        try:
+            cp_cap_int = int(cp_cap)
+            if cp_cap_int not in [500, 1500, 2500]:
+                return jsonify({'error': 'Invalid CP cap. Supported values: 500, 1500, 2500'}), 400
+        except ValueError:
+            return jsonify({'error': 'Invalid CP cap format'}), 400
+        
+        # Reload PvP rankings for the new CP cap
+        reload_pvp_rankings_for_cap(cp_cap_int)
+        
+        # Also reload PokeData with the new CP cap
+        global poke_data, battle_simulator
+        poke_data = PokeData(cp_cap=cp_cap_int)
+        
+        # Update the battle simulator with the new PokeData
+        battle_simulator = BattleSimulator(poke_data)
+        
+        return jsonify({
+            'success': True,
+            'cp_cap': cp_cap_int,
+            'message': f'Switched to CP {cp_cap_int} league'
+        })
+        
+    except Exception as e:
+        print(f"Error changing league to CP {cp_cap}: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
 
 # Security: Add security headers
 @app.after_request

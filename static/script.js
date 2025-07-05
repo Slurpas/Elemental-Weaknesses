@@ -6,6 +6,11 @@ const pokemonInfo = document.getElementById('pokemonInfo');
 const loading = document.getElementById('loading');
 const error = document.getElementById('error');
 
+// Help modal elements
+const helpBtn = document.getElementById('helpBtn');
+const helpModal = document.getElementById('helpModal');
+const closeHelpModalBtn = document.getElementById('closeHelpModal');
+
 // Team management
 let userTeam = [];
 let currentOpponent = null;
@@ -27,6 +32,8 @@ const closeTeamModalBtn = document.getElementById('closeTeamModal');
 // Battle Simulation State
 let battleSimulationState = {
     shieldCount: 2,
+    p1ShieldAI: 'smart_30',
+    p2ShieldAI: 'smart_30',
     simulations: {} // Cache for battle results
 };
 
@@ -57,6 +64,24 @@ pokemonSearch.addEventListener('keypress', (e) => {
         if (query) {
             getPokemonData(query);
         }
+    }
+});
+
+// Help modal event listeners
+helpBtn.addEventListener('click', showHelpModal);
+closeHelpModalBtn.addEventListener('click', closeHelpModal);
+
+// Close help modal when clicking outside
+helpModal.addEventListener('click', (e) => {
+    if (e.target === helpModal) {
+        closeHelpModal();
+    }
+});
+
+// Close help modal with Escape key
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !helpModal.classList.contains('hidden')) {
+        closeHelpModal();
     }
 });
 
@@ -316,6 +341,17 @@ function hidePokemonInfo() {
     pokemonInfo.classList.add('hidden');
 }
 
+// Help modal functions
+function showHelpModal() {
+    helpModal.classList.remove('hidden');
+    document.body.style.overflow = 'hidden'; // Prevent background scrolling
+}
+
+function closeHelpModal() {
+    helpModal.classList.add('hidden');
+    document.body.style.overflow = ''; // Restore scrolling
+}
+
 // Open modal when a team slot is clicked
 function openTeamSlot(slotNumber) {
     currentTeamSlot = slotNumber;
@@ -376,8 +412,8 @@ window.openMoveSelector = function(slotNumber, currentMoveName, moveClass) {
     const pokemon = userTeam.find(p => p.slot === slotNumber);
     if (!pokemon) return;
     
-    // Get all available moves for this Pokémon
-    fetch(`/api/pokemon/${pokemon.name}/moves`)
+    // Use only speciesId for API calls
+    fetch(`/api/pokemon/${encodeURIComponent(pokemon.speciesId)}/moves`)
         .then(res => res.json())
         .then(data => {
             if (data.error) {
@@ -447,8 +483,8 @@ window.selectMove = function(moveName) {
     
     if (!pokemon) return;
     
-    // Get the move details from the API to update the pvp_moves array
-    fetch(`/api/pokemon/${pokemon.name}/moves`)
+    // Use only speciesId for API calls
+    fetch(`/api/pokemon/${encodeURIComponent(pokemon.speciesId)}/moves`)
         .then(res => res.json())
         .then(data => {
             if (data.error) {
@@ -547,36 +583,24 @@ async function addPokemonToTeam(pokemonName, slotNumber) {
     try {
         const response = await fetch(`/api/pokemon/${encodeURIComponent(pokemonName)}`);
         const data = await response.json();
-        
         if (data.error) {
-            alert(`Pokemon not found: ${pokemonName}`);
+            alert('Failed to add Pokémon');
             return;
         }
-        
-        // Add to team
-        const teamMember = {
-            slot: slotNumber,
-            name: data.name,
-            speciesId: data.speciesId || data.name.toLowerCase().replace(' ', '_'),
-            sprite: data.sprite,
-            types: data.types,
-            effectiveness: data.effectiveness,
-            pvp_moves: data.pvp_moves || []
-        };
-        
-        // Remove existing Pokemon in this slot
+        // Always ensure both name and speciesId are present and correct
         userTeam = userTeam.filter(p => p.slot !== slotNumber);
-        userTeam.push(teamMember);
-        
-        // Update UI
-        updateTeamSlot(slotNumber, teamMember);
+        userTeam.push({
+            ...data,
+            slot: slotNumber,
+            name: data.name, // display name
+            speciesId: data.speciesId // canonical ID for API calls
+        });
+        updateTeamSlot(slotNumber, data);
         updateTeamAnalysis();
-        
+        onSelectionChange();
     } catch (error) {
-        console.error('Error adding Pokemon to team:', error);
-        alert('Failed to add Pokemon to team');
+        alert('Failed to add Pokémon');
     }
-    onSelectionChange();
 }
 
 function updateTeamSlot(slotNumber, pokemon, movesEffectiveness = null, isBestCounter = false) {
@@ -902,8 +926,6 @@ function displayTeamCoverage(coverage) {
     coverageGrid.innerHTML = coverageHTML || '<div class="no-data">No coverage data</div>';
 }
 
-
-
 // Close search results when clicking outside
 document.addEventListener('click', (e) => {
     if (!e.target.closest('.search-section')) {
@@ -1122,13 +1144,13 @@ document.querySelector('.team-slots').addEventListener('click', (e) => {
 async function updateMatchupAnalysis() {
     // Only run if we have an opponent and at least one team member
     if (!currentOpponent || userTeam.length === 0) return;
-    const opponentName = currentOpponent.name;
-    const teamNames = userTeam.map(p => p.name);
+    const opponentId = currentOpponent.speciesId || currentOpponent.name;
+    const teamIds = userTeam.map(p => p.speciesId || p.name);
     try {
         const resp = await fetch('/api/matchup', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ opponent: opponentName, team: teamNames })
+            body: JSON.stringify({ opponent: opponentId, team: teamIds })
         });
         const data = await resp.json();
         renderOpponentMovesVsTeam(data.opponent_moves_vs_team, data.team);
@@ -1381,18 +1403,19 @@ async function runBattleSimulations() {
         if (!teamPokemon) continue;
 
         console.log(`Simulating battle for ${teamPokemon.name} vs ${currentOpponent.name}`);
+        console.log('Using speciesIds:', teamPokemon.speciesId, currentOpponent.speciesId);
 
         try {
-            // Get PvP moves for team Pokémon
-            const teamMoves = await getPvPMovesForPokemon(teamPokemon.name);
+            // Get PvP moves for team Pokémon (use speciesId)
+            const teamMoves = await getPvPMovesForPokemon(teamPokemon.speciesId);
             console.log(`Team moves for ${teamPokemon.name}:`, teamMoves);
             if (!teamMoves || teamMoves.length === 0) {
                 console.log(`No PvP moves found for ${teamPokemon.name}`);
                 continue;
             }
 
-            // Get PvP moves for opponent
-            const opponentMoves = await getPvPMovesForPokemon(currentOpponent.name);
+            // Get PvP moves for opponent (use speciesId)
+            const opponentMoves = await getPvPMovesForPokemon(currentOpponent.speciesId);
             console.log(`Opponent moves for ${currentOpponent.name}:`, opponentMoves);
             if (!opponentMoves || opponentMoves.length === 0) {
                 console.log(`No PvP moves found for ${currentOpponent.name}`);
@@ -1403,7 +1426,9 @@ async function runBattleSimulations() {
             const battleResult = await runSingleBattle(
                 teamPokemon, teamMoves,
                 currentOpponent, opponentMoves,
-                shieldCount
+                shieldCount,
+                battleSimulationState.p1ShieldAI,
+                battleSimulationState.p2ShieldAI
             );
 
             console.log(`Battle result for ${teamPokemon.name}:`, battleResult);
@@ -1428,42 +1453,26 @@ async function runBattleSimulations() {
     displayBattleSimulations(results);
 }
 
-async function getPvPMovesForPokemon(pokemonName) {
+// Only fetch by speciesId, never normalize from display name
+async function getPvPMovesForPokemon(speciesId) {
     try {
-        console.log(`Getting PvP moves for: ${pokemonName}`);
-        
-        // Try with the name as-is first
-        let response = await fetch(`/api/pokemon/${pokemonName}`);
+        console.log(`Getting PvP moves for speciesId: ${speciesId}`);
+        let response = await fetch(`/api/pokemon/${speciesId}`);
         let data = await response.json();
-        
-        console.log(`Initial response for ${pokemonName}:`, data);
-        
-        // If not found and it's an alternate form, try with speciesId format
-        if (data.error && pokemonName.includes('(')) {
-            const speciesId = pokemonName.toLowerCase()
-                .replace('(', '')
-                .replace(')', '')
-                .replace(' ', '_')
-                .replace('galarian', 'galar')
-                .replace('alolan', 'alola')
-                .replace('hisuian', 'hisui');
-            
-            console.log(`Trying with speciesId: ${speciesId}`);
-            response = await fetch(`/api/pokemon/${speciesId}`);
-            data = await response.json();
-            console.log(`SpeciesId response for ${pokemonName}:`, data);
+        if (data.error) {
+            console.error(`Error fetching PvP moves for ${speciesId}:`, data.error);
+            return [];
         }
-        
         const pvpMoves = data.pvp_moves || [];
-        console.log(`PvP moves for ${pokemonName}:`, pvpMoves);
+        console.log(`PvP moves for ${speciesId}:`, pvpMoves);
         return pvpMoves;
     } catch (error) {
-        console.error(`Error getting PvP moves for ${pokemonName}:`, error);
+        console.error(`Error getting PvP moves for ${speciesId}:`, error);
         return [];
     }
 }
 
-async function runSingleBattle(teamPokemon, teamMoves, opponentPokemon, opponentMoves, shieldCount) {
+async function runSingleBattle(teamPokemon, teamMoves, opponentPokemon, opponentMoves, shieldCount, p1ShieldAI, p2ShieldAI) {
     console.log('Running single battle with:', { teamPokemon, teamMoves, opponentPokemon, opponentMoves, shieldCount });
     
     // Prepare battle data using best PvP moves
@@ -1490,8 +1499,8 @@ async function runSingleBattle(teamPokemon, teamMoves, opponentPokemon, opponent
             .replace('(', '')
             .replace(')', '')
             .replace(' ', '_')
-            .replace('galarian', 'galarian')  // Keep as 'galarian', not 'galar'
-            .replace('alolan', 'alolan')      // Keep as 'alolan', not 'alola'
+            .replace('galarian', 'galar')  // Keep as 'galarian', not 'galar'
+            .replace('alolan', 'alola')      // Keep as 'alolan', not 'alola'
             .replace('hisuian', 'hisuian');   // Keep as 'hisuian', not 'hisui'
     }
     
@@ -1500,8 +1509,8 @@ async function runSingleBattle(teamPokemon, teamMoves, opponentPokemon, opponent
             .replace('(', '')
             .replace(')', '')
             .replace(' ', '_')
-            .replace('galarian', 'galarian')  // Keep as 'galarian', not 'galar'
-            .replace('alolan', 'alolan')      // Keep as 'alolan', not 'alola'
+            .replace('galarian', 'galar')  // Keep as 'galarian', not 'galar'
+            .replace('alolan', 'alola')      // Keep as 'alolan', not 'alola'
             .replace('hisuian', 'hisuian');   // Keep as 'hisuian', not 'hisui'
     }
 
@@ -1521,7 +1530,9 @@ async function runSingleBattle(teamPokemon, teamMoves, opponentPokemon, opponent
             charged2: opponentChargedMoves[1] ? opponentChargedMoves[1].name.toUpperCase().replace(' ', '_') : null
         },
         p1_shields: shieldCount,
-        p2_shields: shieldCount
+        p2_shields: shieldCount,
+        p1_shield_ai: p1ShieldAI || 'smart_30',
+        p2_shield_ai: p2ShieldAI || 'smart_30'
     };
 
     console.log('Battle data before cleanup:', battleData);
@@ -1597,9 +1608,43 @@ function updateTeamSlotBorders(results, bestRating) {
     });
 }
 
+// Initialize shield AI selectors
+function initShieldAISelectors() {
+    const p1ShieldAI = document.getElementById('p1ShieldAI');
+    const p2ShieldAI = document.getElementById('p2ShieldAI');
+    
+    if (p1ShieldAI && p2ShieldAI) {
+        // Set initial values
+        p1ShieldAI.value = battleSimulationState.p1ShieldAI;
+        p2ShieldAI.value = battleSimulationState.p2ShieldAI;
+        
+        // Add event listeners
+        p1ShieldAI.addEventListener('change', function() {
+            battleSimulationState.p1ShieldAI = this.value;
+            console.log('P1 Shield AI changed to:', this.value);
+            // Trigger battle simulation update if we have an opponent
+            if (currentOpponent && userTeam.length > 0) {
+                runBattleSimulations();
+            }
+        });
+        
+        p2ShieldAI.addEventListener('change', function() {
+            battleSimulationState.p2ShieldAI = this.value;
+            console.log('P2 Shield AI changed to:', this.value);
+            // Trigger battle simulation update if we have an opponent
+            if (currentOpponent && userTeam.length > 0) {
+                runBattleSimulations();
+            }
+        });
+    }
+}
+
 // Initialize battle simulations when DOM is loaded
 document.addEventListener('DOMContentLoaded', function() {
     // ... existing initialization code ...
     
     initBattleSimulations();
+    
+    // Initialize shield AI selectors
+    initShieldAISelectors();
 }); 

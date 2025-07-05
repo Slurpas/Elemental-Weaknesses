@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Help System Test</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header-text {
+            text-align: left;
+            color: white;
+        }
+
+        .help-button {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 20px;
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 12px;
+            color: white;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+
+        .help-button:hover {
+            background: rgba(255, 255, 255, 0.3);
+            border-color: rgba(255, 255, 255, 0.5);
+            transform: translateY(-2px);
+        }
+
+        .help-icon {
+            font-size: 1.2rem;
+            font-weight: bold;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+        }
+
+        .help-text {
+            display: none;
+        }
+
+        @media (min-width: 768px) {
+            .help-text {
+                display: inline;
+            }
+        }
+
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal.hidden { 
+            display: none; 
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            position: relative;
+            max-width: 90vw;
+            max-height: 90vh;
+            overflow: hidden;
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 15px;
+            right: 20px;
+            background: none;
+            border: none;
+            font-size: 2rem;
+            cursor: pointer;
+            color: #666;
+            z-index: 10;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: all 0.3s ease;
+        }
+
+        .modal-close:hover {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        .help-modal-content {
+            max-width: 900px;
+            max-height: 90vh;
+            overflow-y: auto;
+            padding: 0;
+        }
+
+        .help-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 16px 16px 0 0;
+            text-align: center;
+        }
+
+        .help-header h2 {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+
+        .help-header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .help-content {
+            padding: 30px;
+        }
+
+        .help-section {
+            margin-bottom: 40px;
+        }
+
+        .help-section h3 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: #333;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+        }
+
+        .help-item {
+            margin-bottom: 25px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 12px;
+            border-left: 4px solid #667eea;
+        }
+
+        .help-item h4 {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .help-item p {
+            margin-bottom: 15px;
+            line-height: 1.6;
+            color: #555;
+        }
+
+        .help-item ul {
+            margin-left: 20px;
+            line-height: 1.6;
+        }
+
+        .help-item li {
+            margin-bottom: 8px;
+            color: #555;
+        }
+
+        .strategy-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .strategy-card {
+            background: white;
+            border: 2px solid #e9ecef;
+            border-radius: 12px;
+            padding: 20px;
+            transition: all 0.3s ease;
+        }
+
+        .strategy-card:hover {
+            border-color: #667eea;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.1);
+        }
+
+        .strategy-card h4 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #333;
+            text-align: center;
+        }
+
+        .strategy-card ul {
+            margin: 0;
+            padding-left: 20px;
+        }
+
+        .strategy-card li {
+            margin-bottom: 8px;
+            font-size: 0.95rem;
+            line-height: 1.5;
+        }
+
+        .type-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: white;
+            margin-right: 8px;
+            min-width: 40px;
+            text-align: center;
+        }
+
+        .type-fire { background: #F08030; }
+        .type-normal { background: #A8A878; }
+        .type-steel { background: #B8B8D0; }
+        .type-ghost { background: #705898; }
+
+        @media (max-width: 600px) {
+            .help-modal-content {
+                margin: 10px;
+                max-height: 95vh;
+            }
+            
+            .help-header {
+                padding: 20px;
+            }
+            
+            .help-header h2 {
+                font-size: 1.5rem;
+            }
+            
+            .help-content {
+                padding: 20px;
+            }
+            
+            .strategy-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .header-content {
+                flex-direction: column;
+                gap: 15px;
+            }
+            
+            .header-text {
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-content">
+                <div class="header-text">
+                    <h1>Pokemon PvP Analyzer</h1>
+                    <p>Get weaknesses, resistances, moves, and battle simulations for any Pokemon</p>
+                </div>
+                <button id="helpBtn" class="help-button" title="Help & Guide">
+                    <span class="help-icon">?</span>
+                    <span class="help-text">Help</span>
+                </button>
+            </div>
+        </header>
+
+        <div style="text-align: center; color: white; margin-top: 50px;">
+            <h2>Help System Test</h2>
+            <p>Click the Help button in the header to test the help modal</p>
+        </div>
+    </div>
+
+    <!-- Help Modal -->
+    <div id="helpModal" class="modal hidden">
+        <div class="modal-content help-modal-content">
+            <button class="modal-close" id="closeHelpModal">×</button>
+            <div class="help-header">
+                <h2>Pokemon PvP Analyzer - Help & Guide</h2>
+                <p>Learn how to use all the features of this PvP battle simulator</p>
+            </div>
+            
+            <div class="help-content">
+                <div class="help-section">
+                    <h3>🎯 Getting Started</h3>
+                    <div class="help-item">
+                        <h4>Search for Pokemon</h4>
+                        <p>Use the search bar on the left to find any Pokemon. Type the name and select from the dropdown results. The Pokemon's stats, moves, and type effectiveness will be displayed.</p>
+                    </div>
+                    
+                    <div class="help-item">
+                        <h4>Build Your Team</h4>
+                        <p>Click the "+" buttons in the "Your Team" section to add Pokemon to your team. You can add up to 3 Pokemon for team analysis and battle simulations.</p>
+                    </div>
+                </div>
+
+                <div class="help-section">
+                    <h3>⚔️ Battle Simulations</h3>
+                    <div class="help-item">
+                        <h4>League Selection</h4>
+                        <p>Choose your CP cap for battle simulations:</p>
+                        <ul>
+                            <li><strong>500 CP:</strong> Little Cup format</li>
+                            <li><strong>1500 CP:</strong> Great League format</li>
+                            <li><strong>2500 CP:</strong> Ultra League format</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="help-item">
+                        <h4>Shield Management</h4>
+                        <p>Use the shield slider to set how many shields each player has (0-2). This affects battle outcomes significantly.</p>
+                    </div>
+                </div>
+
+                <div class="help-section">
+                    <h3>🛡️ Shield AI Strategies</h3>
+                    <p>Choose how the AI decides when to use shields during battles:</p>
+                    
+                    <div class="strategy-grid">
+                        <div class="strategy-card">
+                            <h4>Smart Strategies</h4>
+                            <ul>
+                                <li><strong>Smart (30%):</strong> Shields when incoming damage exceeds 30% of max HP</li>
+                                <li><strong>Aggressive (20%):</strong> Shields when damage > 20% of max HP</li>
+                                <li><strong>Conservative (50%):</strong> Shields when damage > 50% of max HP</li>
+                            </ul>
+                        </div>
+                        
+                        <div class="strategy-card">
+                            <h4>Advanced Strategies</h4>
+                            <ul>
+                                <li><strong>Balanced:</strong> Considers type effectiveness and opponent's energy</li>
+                                <li><strong>Very Conservative:</strong> Saves shields for high-damage moves</li>
+                                <li><strong>Very Aggressive:</strong> Uses shields early to maintain pressure</li>
+                            </ul>
+                        </div>
+                        
+                        <div class="strategy-card">
+                            <h4>Simple Strategies</h4>
+                            <ul>
+                                <li><strong>Always Shield:</strong> Uses shields whenever available</li>
+                                <li><strong>Never Shield:</strong> Never uses shields</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="help-section">
+                    <h3>📊 Understanding Results</h3>
+                    <div class="help-item">
+                        <h4>Battle Rating</h4>
+                        <p>The battle rating shows how well your Pokemon performs:</p>
+                        <ul>
+                            <li><strong>0.9+ (Excellent):</strong> Dominant win</li>
+                            <li><strong>0.7-0.9 (Good):</strong> Comfortable win</li>
+                            <li><strong>0.5-0.7 (Close):</strong> Narrow win</li>
+                            <li><strong>0.3-0.5 (Neutral):</strong> Close loss</li>
+                            <li><strong>0.1-0.3 (Bad):</strong> Significant loss</li>
+                            <li><strong>0.0-0.1 (Terrible):</strong> Complete loss</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="help-item">
+                        <h4>Type Effectiveness</h4>
+                        <p>Colors indicate move effectiveness:</p>
+                        <ul>
+                            <li><span class="type-badge type-fire">Red</span> Super effective (2x damage)</li>
+                            <li><span class="type-badge type-normal">Gray</span> Normal effectiveness (1x damage)</li>
+                            <li><span class="type-badge type-steel">Blue</span> Not very effective (0.5x damage)</li>
+                            <li><span class="type-badge type-ghost">Purple</span> Immune (0x damage)</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="help-section">
+                    <h3>🔧 Tips & Tricks</h3>
+                    <div class="help-item">
+                        <h4>Team Building</h4>
+                        <ul>
+                            <li>Check type coverage to ensure you can handle different threats</li>
+                            <li>Consider shield usage patterns when choosing moves</li>
+                            <li>Test your team against common meta Pokemon</li>
+                            <li>Balance fast and charged move energy costs</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="help-item">
+                        <h4>Battle Strategy</h4>
+                        <ul>
+                            <li>Use shield AI strategies that match your playstyle</li>
+                            <li>Consider energy management and move timing</li>
+                            <li>Test different shield scenarios (0, 1, or 2 shields)</li>
+                            <li>Analyze battle timelines to understand key moments</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Help modal elements
+        const helpBtn = document.getElementById('helpBtn');
+        const helpModal = document.getElementById('helpModal');
+        const closeHelpModalBtn = document.getElementById('closeHelpModal');
+
+        // Help modal event listeners
+        helpBtn.addEventListener('click', showHelpModal);
+        closeHelpModalBtn.addEventListener('click', closeHelpModal);
+
+        // Close help modal when clicking outside
+        helpModal.addEventListener('click', (e) => {
+            if (e.target === helpModal) {
+                closeHelpModal();
+            }
+        });
+
+        // Close help modal with Escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && !helpModal.classList.contains('hidden')) {
+                closeHelpModal();
+            }
+        });
+
+        // Help modal functions
+        function showHelpModal() {
+            helpModal.classList.remove('hidden');
+            document.body.style.overflow = 'hidden'; // Prevent background scrolling
+        }
+
+        function closeHelpModal() {
+            helpModal.classList.add('hidden');
+            document.body.style.overflow = ''; // Restore scrolling
+        }
+    </script>
+</body>
+</html> 
