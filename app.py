@@ -136,131 +136,9 @@ def validate_search_query(query):
         return False
     return True
 
-move_type_cache = {}
-move_type_cache_lock = threading.Lock()
+# Note: get_move_type_and_class() function removed - using PvPoke data instead
 
-def get_move_type_and_class(move_name):
-    key = move_name.lower().replace(' ', '-').replace('_', '-')
-    with move_type_cache_lock:
-        if key in move_type_cache:
-            return move_type_cache[key]
-    # Fetch from PokeAPI
-    url = f'https://pokeapi.co/api/v2/move/{key}'
-    resp = requests.get(url)
-    if resp.status_code == 200:
-        data = resp.json()
-        move_type = data['type']['name']
-        move_class = data['damage_class']['name']
-        with move_type_cache_lock:
-            move_type_cache[key] = (move_type, move_class)
-        return move_type, move_class
-    return None, None
-
-def get_pvp_moves_for_pokemon(name):
-    """Get PvP moves for a Pokemon from PvPoke rankings data"""
-    # Try direct match, then try removing dashes/spaces, then fallback
-    key = name.lower().replace(' ', '').replace('_', '-').replace('.', '').replace("'", "").replace('é', 'e')
-    
-    # Handle special cases for form names - match the PvPoke speciesId format
-    if '(galarian)' in name.lower():
-        key = key.replace('(galarian)', '_galarian')
-    elif '(alolan)' in name.lower():
-        key = key.replace('(alolan)', '_alolan')
-    elif '(hisuian)' in name.lower():
-        key = key.replace('(hisuian)', '_hisuian')
-    elif '(shadow)' in name.lower():
-        key = key.replace('(shadow)', '_shadow')
-    else:
-        # Fallback for other formats
-        if 'galarian' in key:
-            key = key.replace('galarian', '_galarian')
-        if 'alolan' in key:
-            key = key.replace('alolan', '_alolan')
-        if 'hisuian' in key:
-            key = key.replace('hisuian', '_hisuian')
-    
-    # Try to find the Pokemon in PvPoke rankings
-    if key in pvp_rankings_by_species:
-        row = pvp_rankings_by_species[key]
-    else:
-        # Try partial matches
-        for k in pvp_rankings_by_species:
-            if key in k or k in key:
-                row = pvp_rankings_by_species[k]
-                break
-        else:
-            return []
-    
-    moves = []
-    
-    # Get moves from PvPoke data
-    if 'moves' in row and 'fastMoves' in row['moves'] and 'chargedMoves' in row['moves']:
-        # Add fast moves (use the most popular one)
-        if row['moves']['fastMoves']:
-            fast_move = row['moves']['fastMoves'][0]['moveId']
-            move_details = poke_data.get_move_details(fast_move)
-            move_type = move_details.get('type', '') if move_details else ''
-            
-            moves.append({
-                'name': fast_move,
-                'type': move_type,
-                'move_class': 'fast',
-                'dpe': None,
-                'power': move_details.get('power', 0) if move_details else 0,
-                'energy': move_details.get('energy', 0) if move_details else 0
-            })
-        
-        # Add charged moves (use the most popular ones)
-        for i, charged_move in enumerate(row['moves']['chargedMoves'][:2]):  # Top 2 charged moves
-            move_id = charged_move['moveId']
-            move_details = poke_data.get_move_details(move_id)
-            move_type = move_details.get('type', '') if move_details else ''
-            
-            # Calculate DPE for charge moves
-            dpe = None
-            if move_details:
-                power = move_details.get('power', 0)
-                energy = move_details.get('energy', 0)
-                if energy > 0:
-                    dpe = round(power / energy, 2)
-            
-            moves.append({
-                'name': move_id,
-                'type': move_type,
-                'move_class': 'charged',
-                'dpe': dpe,
-                'power': move_details.get('power', 0) if move_details else 0,
-                'energy': move_details.get('energy', 0) if move_details else 0
-            })
-    
-    # Fallback to moveset if moves data is not available
-    elif 'moveset' in row and row['moveset']:
-        for i, move_name in enumerate(row['moveset']):
-            if move_name and move_name.lower() != 'none':
-                move_details = poke_data.get_move_details(move_name)
-                move_type = move_details.get('type', '') if move_details else ''
-                
-                # Determine move class (first is fast, rest are charged)
-                move_class = 'fast' if i == 0 else 'charged'
-                
-                # Calculate DPE for charge moves
-                dpe = None
-                if move_class == 'charged' and move_details:
-                    power = move_details.get('power', 0)
-                    energy = move_details.get('energy', 0)
-                    if energy > 0:
-                        dpe = round(power / energy, 2)
-                
-                moves.append({
-                    'name': move_name,
-                    'type': move_type,
-                    'move_class': move_class,
-                    'dpe': dpe,
-                    'power': move_details.get('power', 0) if move_details else 0,
-                    'energy': move_details.get('energy', 0) if move_details else 0
-                })
-    
-    return moves
+# Note: get_pvp_moves_for_pokemon() function removed - using poke_data.get_pokemon_moves() instead
 
 def get_cached_pokemon(name):
     """Get Pokemon data from cache if it's still valid"""
@@ -340,11 +218,20 @@ def get_pokemon(name):
                 'move_class': 'fast' if move_id in p.get('fastMoves', []) else 'charged'
             })
 
-        # Get PvP moves from CSV (if still desired)
-        # Try with speciesName first, then with speciesId
-        pvp_moves = get_pvp_moves_for_pokemon(p.get('speciesName', sanitized_name))
-        if not pvp_moves:
-            pvp_moves = get_pvp_moves_for_pokemon(sanitized_name)
+        # Get PvP moves using poke_data
+        pvp_moves_data = poke_data.get_pokemon_moves(p.get('speciesId', sanitized_name))
+        pvp_moves = []
+        
+        # Convert to the expected format
+        for move in pvp_moves_data.get('fast_moves', []) + pvp_moves_data.get('charged_moves', []):
+            pvp_moves.append({
+                'name': move['name'],
+                'type': move['type'],
+                'move_class': move.get('move_class', 'fast' if move in pvp_moves_data.get('fast_moves', []) else 'charged'),
+                'dpe': None,  # Will be calculated below
+                'power': move.get('power', 0),
+                'energy': move.get('energy', 0)
+            })
         
         for move in pvp_moves:
             if move['type']:
@@ -473,40 +360,43 @@ def get_type_effectiveness(types):
                     continue
             
             # Process damage relations
-            print(f"DEBUG: Damage relations for {defending_type}: {type_data['damage_relations']}")
-            
-            for relation_name, type_list in type_data['damage_relations'].items():
-                print(f"DEBUG: Processing {relation_name} for {defending_type}")
-                if relation_name == 'double_damage_from':
-                    for attacking_type_info in type_list:
-                        attacking_type_name = attacking_type_info['name']
-                        if attacking_type_name in combined_effectiveness:
-                            old_value = combined_effectiveness[attacking_type_name]
-                            combined_effectiveness[attacking_type_name] *= 2
-                            print(f"DEBUG: {attacking_type_name} vs {defending_type}: {old_value} -> {combined_effectiveness[attacking_type_name]}")
-                elif relation_name == 'half_damage_from':
-                    for attacking_type_info in type_list:
-                        attacking_type_name = attacking_type_info['name']
-                        if attacking_type_name in combined_effectiveness:
-                            old_value = combined_effectiveness[attacking_type_name]
-                            combined_effectiveness[attacking_type_name] *= 0.5
-                            print(f"DEBUG: {attacking_type_name} vs {defending_type}: {old_value} -> {combined_effectiveness[attacking_type_name]}")
-                elif relation_name == 'no_damage_from':
-                    for attacking_type_info in type_list:
-                        attacking_type_name = attacking_type_info['name']
-                        if attacking_type_name in combined_effectiveness:
-                            old_value = combined_effectiveness[attacking_type_name]
-                            combined_effectiveness[attacking_type_name] *= 0
-                            print(f"DEBUG: {attacking_type_name} vs {defending_type}: {old_value} -> {combined_effectiveness[attacking_type_name]}")
+            if 'damage_relations' in type_data:
+                print(f"DEBUG: Damage relations for {defending_type}: {type_data['damage_relations']}")
+                for relation_name, type_list in type_data['damage_relations'].items():
+                    print(f"DEBUG: Processing {relation_name} for {defending_type}")
+                    if relation_name == 'double_damage_from':
+                        for attacking_type_info in type_list:
+                            attacking_type_name = attacking_type_info['name']
+                            if attacking_type_name in combined_effectiveness:
+                                old_value = combined_effectiveness[attacking_type_name]
+                                combined_effectiveness[attacking_type_name] *= 2
+                                print(f"DEBUG: {attacking_type_name} vs {defending_type}: {old_value} -> {combined_effectiveness[attacking_type_name]}")
+                    elif relation_name == 'half_damage_from':
+                        for attacking_type_info in type_list:
+                            attacking_type_name = attacking_type_info['name']
+                            if attacking_type_name in combined_effectiveness:
+                                old_value = combined_effectiveness[attacking_type_name]
+                                combined_effectiveness[attacking_type_name] *= 0.5
+                                print(f"DEBUG: {attacking_type_name} vs {defending_type}: {old_value} -> {combined_effectiveness[attacking_type_name]}")
+                    elif relation_name == 'no_damage_from':
+                        for attacking_type_info in type_list:
+                            attacking_type_name = attacking_type_info['name']
+                            if attacking_type_name in combined_effectiveness:
+                                old_value = combined_effectiveness[attacking_type_name]
+                                combined_effectiveness[attacking_type_name] *= 0
+                                print(f"DEBUG: {attacking_type_name} vs {defending_type}: {old_value} -> {combined_effectiveness[attacking_type_name]}")
+            else:
+                print(f"ERROR: No 'damage_relations' found for type {defending_type}. type_data: {type_data}")
+                continue
         
         print(f"DEBUG: Final effectiveness: {combined_effectiveness}")
         
-        # Return detailed effectiveness with multipliers
+        # Return detailed effectiveness with multipliers (no immunities in Go PvP)
         result = {
             'effectiveness': combined_effectiveness,
             'weaknesses': [(type_name, mult) for type_name, mult in combined_effectiveness.items() if mult > 1],
             'resistances': [(type_name, mult) for type_name, mult in combined_effectiveness.items() if mult < 1 and mult > 0],
-            'immunities': [(type_name, mult) for type_name, mult in combined_effectiveness.items() if mult == 0]
+            'double_resistances': [(type_name, mult) for type_name, mult in combined_effectiveness.items() if mult < 0.5]
         }
         
         # Cache the result
@@ -558,12 +448,12 @@ def get_fallback_effectiveness(types):
                 multiplier *= effectiveness_chart[attacking_type][defending_type]
         combined_effectiveness[attacking_type] = multiplier
     
-    # Return detailed effectiveness with multipliers
+    # Return detailed effectiveness with multipliers (no immunities in Go PvP)
     return {
         'effectiveness': combined_effectiveness,
         'weaknesses': [(type_name, mult) for type_name, mult in combined_effectiveness.items() if mult > 1],
         'resistances': [(type_name, mult) for type_name, mult in combined_effectiveness.items() if mult < 1 and mult > 0],
-        'immunities': [(type_name, mult) for type_name, mult in combined_effectiveness.items() if mult == 0]
+        'double_resistances': [(type_name, mult) for type_name, mult in combined_effectiveness.items() if mult < 0.5]
     }
 
 @app.route('/api/matchup', methods=['POST'])
@@ -722,8 +612,8 @@ def api_battle():
             return jsonify({'error': 'Missing required parameters'}), 400
         
         # Validate CP cap
-        if cp_cap not in [500, 1500, 2500]:
-            return jsonify({'error': 'Invalid CP cap. Supported values: 500, 1500, 2500'}), 400
+        if cp_cap not in [0, 500, 1500, 2500]:
+            return jsonify({'error': 'Invalid CP cap. Supported values: 0 (Master League), 500, 1500, 2500'}), 400
         
         # Validate shield AI strategies
         valid_shield_strategies = ['never', 'always', 'smart_20', 'smart_30', 'smart_50', 'conservative', 'aggressive', 'balanced']
@@ -871,8 +761,8 @@ def change_league(cp_cap):
         # Validate CP cap
         try:
             cp_cap_int = int(cp_cap)
-            if cp_cap_int not in [500, 1500, 2500]:
-                return jsonify({'error': 'Invalid CP cap. Supported values: 500, 1500, 2500'}), 400
+            if cp_cap_int not in [0, 500, 1500, 2500]:
+                return jsonify({'error': 'Invalid CP cap. Supported values: 0 (Master League), 500, 1500, 2500'}), 400
         except ValueError:
             return jsonify({'error': 'Invalid CP cap format'}), 400
         
@@ -903,7 +793,7 @@ def add_security_headers(response):
     response.headers['X-Content-Type-Options'] = 'nosniff'
     response.headers['X-Frame-Options'] = 'DENY'
     response.headers['X-XSS-Protection'] = '1; mode=block'
-    response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:;"
+    response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:;"
     response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
     return response
 

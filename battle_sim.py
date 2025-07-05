@@ -93,7 +93,7 @@ class DamageMultiplier:
     BONUS = 1.2999999523162841796875
     SUPER_EFFECTIVE = 1.60000002384185791015625
     RESISTED = 0.625
-    DOUBLE_RESISTED = 0.390625
+    DOUBLE_RESISTED = 0.390625  # 0.625 * 0.625 (no immunities in Go PvP)
     STAB = 1.2000000476837158203125
     SHADOW_ATK = 1.2
     SHADOW_DEF = 0.83333331
@@ -101,24 +101,25 @@ class DamageMultiplier:
 class TypeChart:
     """PvPoke type effectiveness chart"""
     TYPE_TRAITS = {
-        "normal": {"weaknesses": ["fighting"], "resistances": [], "immunities": ["ghost"]},
-        "fighting": {"weaknesses": ["flying", "psychic", "fairy"], "resistances": ["rock", "bug", "dark"], "immunities": []},
-        "flying": {"weaknesses": ["rock", "electric", "ice"], "resistances": ["fighting", "bug", "grass"], "immunities": ["ground"]},
-        "poison": {"weaknesses": ["ground", "psychic"], "resistances": ["fighting", "poison", "bug", "fairy", "grass"], "immunities": []},
-        "ground": {"weaknesses": ["water", "grass", "ice"], "resistances": ["poison", "rock"], "immunities": ["electric"]},
-        "rock": {"weaknesses": ["fighting", "ground", "steel", "water", "grass"], "resistances": ["normal", "flying", "poison", "fire"], "immunities": []},
-        "bug": {"weaknesses": ["flying", "rock", "fire"], "resistances": ["fighting", "ground", "grass"], "immunities": []},
-        "ghost": {"weaknesses": ["ghost", "dark"], "resistances": ["poison", "bug"], "immunities": ["normal", "fighting"]},
-        "steel": {"weaknesses": ["fighting", "ground", "fire"], "resistances": ["normal", "flying", "rock", "bug", "steel", "grass", "psychic", "ice", "dragon", "fairy"], "immunities": ["poison"]},
-        "fire": {"weaknesses": ["ground", "rock", "water"], "resistances": ["bug", "steel", "fire", "grass", "ice", "fairy"], "immunities": []},
-        "water": {"weaknesses": ["grass", "electric"], "resistances": ["steel", "fire", "water", "ice"], "immunities": []},
-        "grass": {"weaknesses": ["flying", "poison", "bug", "fire", "ice"], "resistances": ["ground", "water", "grass", "electric"], "immunities": []},
-        "electric": {"weaknesses": ["ground"], "resistances": ["flying", "steel", "electric"], "immunities": []},
-        "psychic": {"weaknesses": ["bug", "ghost", "dark"], "resistances": ["fighting", "psychic"], "immunities": []},
-        "ice": {"weaknesses": ["fighting", "fire", "steel", "rock"], "resistances": ["ice"], "immunities": []},
-        "dragon": {"weaknesses": ["dragon", "ice", "fairy"], "resistances": ["fire", "water", "grass", "electric"], "immunities": []},
-        "dark": {"weaknesses": ["fighting", "fairy", "bug"], "resistances": ["ghost", "dark"], "immunities": ["psychic"]},
-        "fairy": {"weaknesses": ["poison", "steel"], "resistances": ["fighting", "bug", "dark"], "immunities": ["dragon"]}
+        # Note: In Pokémon Go PvP, there are no immunities - only resistances and double resistances
+        "normal": {"weaknesses": ["fighting"], "resistances": [], "double_resistances": ["ghost"]},
+        "fighting": {"weaknesses": ["flying", "psychic", "fairy"], "resistances": ["rock", "bug", "dark"], "double_resistances": []},
+        "flying": {"weaknesses": ["rock", "electric", "ice"], "resistances": ["fighting", "bug", "grass"], "double_resistances": ["ground"]},
+        "poison": {"weaknesses": ["ground", "psychic"], "resistances": ["fighting", "poison", "bug", "fairy", "grass"], "double_resistances": []},
+        "ground": {"weaknesses": ["water", "grass", "ice"], "resistances": ["poison", "rock"], "double_resistances": ["electric"]},
+        "rock": {"weaknesses": ["fighting", "ground", "steel", "water", "grass"], "resistances": ["normal", "flying", "poison", "fire"], "double_resistances": []},
+        "bug": {"weaknesses": ["flying", "rock", "fire"], "resistances": ["fighting", "ground", "grass"], "double_resistances": []},
+        "ghost": {"weaknesses": ["ghost", "dark"], "resistances": ["poison", "bug"], "double_resistances": ["normal", "fighting"]},
+        "steel": {"weaknesses": ["fighting", "ground", "fire"], "resistances": ["normal", "flying", "rock", "bug", "steel", "grass", "psychic", "ice", "dragon", "fairy"], "double_resistances": ["poison"]},
+        "fire": {"weaknesses": ["ground", "rock", "water"], "resistances": ["bug", "steel", "fire", "grass", "ice", "fairy"], "double_resistances": []},
+        "water": {"weaknesses": ["grass", "electric"], "resistances": ["steel", "fire", "water", "ice"], "double_resistances": []},
+        "grass": {"weaknesses": ["flying", "poison", "bug", "fire", "ice"], "resistances": ["ground", "water", "grass", "electric"], "double_resistances": []},
+        "electric": {"weaknesses": ["ground"], "resistances": ["flying", "steel", "electric"], "double_resistances": []},
+        "psychic": {"weaknesses": ["bug", "ghost", "dark"], "resistances": ["fighting", "psychic"], "double_resistances": []},
+        "ice": {"weaknesses": ["fighting", "fire", "steel", "rock"], "resistances": ["ice"], "double_resistances": []},
+        "dragon": {"weaknesses": ["dragon", "ice", "fairy"], "resistances": ["fire", "water", "grass", "electric"], "double_resistances": []},
+        "dark": {"weaknesses": ["fighting", "fairy", "bug"], "resistances": ["ghost", "dark"], "double_resistances": ["psychic"]},
+        "fairy": {"weaknesses": ["poison", "steel"], "resistances": ["fighting", "bug", "dark"], "double_resistances": ["dragon"]}
     }
 
     @classmethod
@@ -138,7 +139,7 @@ class TypeChart:
                 effectiveness *= DamageMultiplier.SUPER_EFFECTIVE
             elif move_type in traits["resistances"]:
                 effectiveness *= DamageMultiplier.RESISTED
-            elif move_type in traits["immunities"]:
+            elif move_type in traits["double_resistances"]:
                 effectiveness *= DamageMultiplier.DOUBLE_RESISTED
                 
         return effectiveness
@@ -155,18 +156,40 @@ class BattlePokemon:
         # Use PvPoke rank 1 stats if available
         self.species_id = self.data.get('speciesId') or self.data.get('name', '').lower().replace(' ', '_')
         self.rank1_stats = self.poke_data.get_rank1_stats(self.species_id)
+        print(f"[DEBUG] Rank1 stats for {self.species_id}: {self.rank1_stats}")
         if self.rank1_stats:
-            self.atk = self.rank1_stats['atk']
-            self.defense = self.rank1_stats['def']
-            self.hp = self.rank1_stats['hp']
-            self.max_hp = self.hp
-            self.ivs = self.rank1_stats.get('ivs', {})
-            self.stat_product = self.rank1_stats.get('product')
-            self.level = self.rank1_stats.get('level')
-            self.iv_atk = self.rank1_stats.get('iv_atk')
-            self.iv_def = self.rank1_stats.get('iv_def')
-            self.iv_sta = self.rank1_stats.get('iv_sta')
-            print(f"[DEBUG] Using PvPoke rank 1 stats for {self.species_id}: ATK={self.atk}, DEF={self.defense}, HP={self.hp}, Level={self.level}, IVs=({self.iv_atk}/{self.iv_def}/{self.iv_sta}), Stat Product={self.stat_product}")
+            if 'atk' not in self.rank1_stats:
+                print(f"[ERROR] Missing 'atk' key in rank1_stats for {self.species_id}. Available keys: {list(self.rank1_stats.keys())}")
+                # Fallback to old calculation
+                base_stats = self.data.get("baseStats", {})
+                hp_base = base_stats.get("hp", 100)
+                atk_base = base_stats.get("atk", 100)
+                defense_base = base_stats.get("def", 100)
+                hp_iv = atk_iv = defense_iv = 15
+                level = 40
+                self.atk = (atk_base + atk_iv) * (0.5 + level * 0.01)
+                self.defense = (defense_base + defense_iv) * (0.5 + level * 0.01)
+                self.hp = int((hp_base + hp_iv) * (0.5 + level * 0.01))
+                self.max_hp = self.hp
+                self.ivs = {'atk': atk_iv, 'def': defense_iv, 'sta': hp_iv}
+                self.stat_product = self.atk * self.defense * self.hp
+                self.level = level
+                self.iv_atk = atk_iv
+                self.iv_def = defense_iv
+                self.iv_sta = hp_iv
+                print(f"[DEBUG] Using fallback stats for {self.species_id}: ATK={self.atk}, DEF={self.defense}, HP={self.hp}, Level={self.level}, IVs=({self.iv_atk}/{self.iv_def}/{self.iv_sta}), Stat Product={self.stat_product}")
+            else:
+                self.atk = self.rank1_stats['atk']
+                self.defense = self.rank1_stats['def']
+                self.hp = self.rank1_stats['hp']
+                self.max_hp = self.hp
+                self.ivs = self.rank1_stats.get('ivs', {})
+                self.stat_product = self.rank1_stats.get('product')
+                self.level = self.rank1_stats.get('level')
+                self.iv_atk = self.rank1_stats.get('iv_atk')
+                self.iv_def = self.rank1_stats.get('iv_def')
+                self.iv_sta = self.rank1_stats.get('iv_sta')
+                print(f"[DEBUG] Using PvPoke rank 1 stats for {self.species_id}: ATK={self.atk}, DEF={self.defense}, HP={self.hp}, Level={self.level}, IVs=({self.iv_atk}/{self.iv_def}/{self.iv_sta}), Stat Product={self.stat_product}")
         else:
             # Fallback to old calculation
             base_stats = self.data.get("baseStats", {})

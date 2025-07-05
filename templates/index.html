@@ -61,10 +61,10 @@
                                     <h3>Resistances</h3>
                                     <div id="resistancesList" class="type-list"></div>
                                 </div>
-                                <div class="effectiveness-category">
-                                    <h3>Immunities</h3>
+                                                                <div class="effectiveness-category">
+                                    <h3>Double Resistances</h3>
                                     <div id="immunitiesList" class="type-list"></div>
-                        </div>
+                                </div>
                     </div>
                 </div>
             </div>
@@ -82,36 +82,35 @@
                         </div>
                     </div>
                     
+                    <!-- League Selection -->
+                    <div class="league-selector">
+                        <h4>League Selection</h4>
+                        <div class="league-selector-container">
+                            <label for="leagueSelect">Battle League:</label>
+                            <select id="leagueSelect" class="league-dropdown">
+                                <option value="500">Little Cup (500 CP)</option>
+                                <option value="1500" selected>Great League (1500 CP)</option>
+                                <option value="2500">Ultra League (2500 CP)</option>
+                                <option value="0">Master League (No CP Cap)</option>
+                            </select>
+                        </div>
+                    </div>
+                    
                     <!-- Shield AI Strategy Selector -->
                     <div class="shield-ai-selector">
-                        <h4>Shield AI Strategies</h4>
-                        <div class="strategy-selectors">
-                            <div class="strategy-selector">
-                                <label for="p1ShieldAI">Your Team Strategy:</label>
-                                <select id="p1ShieldAI" class="strategy-dropdown">
-                                    <option value="smart_30">Smart (30% damage)</option>
-                                    <option value="smart_20">Aggressive (20% damage)</option>
-                                    <option value="smart_50">Conservative (50% damage)</option>
-                                    <option value="balanced">Balanced</option>
-                                    <option value="conservative">Very Conservative</option>
-                                    <option value="aggressive">Very Aggressive</option>
-                                    <option value="always">Always Shield</option>
-                                    <option value="never">Never Shield</option>
-                                </select>
-                            </div>
-                            <div class="strategy-selector">
-                                <label for="p2ShieldAI">Opponent Strategy:</label>
-                                <select id="p2ShieldAI" class="strategy-dropdown">
-                                    <option value="smart_30">Smart (30% damage)</option>
-                                    <option value="smart_20">Aggressive (20% damage)</option>
-                                    <option value="smart_50">Conservative (50% damage)</option>
-                                    <option value="balanced">Balanced</option>
-                                    <option value="conservative">Very Conservative</option>
-                                    <option value="aggressive">Very Aggressive</option>
-                                    <option value="always">Always Shield</option>
-                                    <option value="never">Never Shield</option>
-                                </select>
-                            </div>
+                        <h4>Shield AI Strategy</h4>
+                        <div class="strategy-selector">
+                            <label for="shieldAI">Strategy for Both Players:</label>
+                            <select id="shieldAI" class="strategy-dropdown">
+                                <option value="smart_30">Smart (30% damage)</option>
+                                <option value="smart_20">Aggressive (20% damage)</option>
+                                <option value="smart_50">Conservative (50% damage)</option>
+                                <option value="balanced">Balanced</option>
+                                <option value="conservative">Very Conservative</option>
+                                <option value="aggressive">Very Aggressive</option>
+                                <option value="always">Always Shield</option>
+                                <option value="never">Never Shield</option>
+                            </select>
                         </div>
                     </div>
                     

@@ -325,7 +325,7 @@ header p {
     background: #51cf66;
 }
 
-.type-badge.immunity {
+.type-badge.double-resistance {
     background: #868e96;
 }
 
@@ -484,6 +484,52 @@ header p {
     color: #667eea;
     min-width: 20px;
     text-align: center;
+}
+
+/* League Selector */
+.league-selector {
+    margin: 20px 0;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 12px;
+    border: 1px solid #e9ecef;
+}
+
+.league-selector h4 {
+    margin: 0 0 15px 0;
+    color: #333;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.league-selector-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.league-selector-container label {
+    display: block;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: #555;
+}
+
+.league-dropdown {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    background: white;
+    cursor: pointer;
+    transition: border-color 0.2s ease;
+}
+
+.league-dropdown:focus {
+    outline: none;
+    border-color: #4CAF50;
+    box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.1);
 }
 
 /* Shield AI Strategy Selector */

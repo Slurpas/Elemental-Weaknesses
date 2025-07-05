@@ -32,8 +32,8 @@ const closeTeamModalBtn = document.getElementById('closeTeamModal');
 // Battle Simulation State
 let battleSimulationState = {
     shieldCount: 2,
-    p1ShieldAI: 'smart_30',
-    p2ShieldAI: 'smart_30',
+    shieldAI: 'smart_30',
+    cpCap: 1500,
     simulations: {} // Cache for battle results
 };
 
@@ -190,11 +190,11 @@ function displayEffectiveness(effectiveness) {
             .join('')
         : '<span class="no-data">None</span>';
     
-    // Immunities
+    // Double Resistances (no immunities in Go PvP)
     const immunitiesList = document.getElementById('immunitiesList');
-    immunitiesList.innerHTML = effectiveness.immunities.length > 0
-        ? effectiveness.immunities
-            .map(([type, mult]) => `<span class="type-badge type-${type} immunity">${type} (${mult}x)</span>`)
+    immunitiesList.innerHTML = effectiveness.double_resistances && effectiveness.double_resistances.length > 0
+        ? effectiveness.double_resistances
+            .map(([type, mult]) => `<span class="type-badge type-${type} double-resistance">${type} (${mult}x)</span>`)
             .join('')
         : '<span class="no-data">None</span>';
 }
@@ -1427,8 +1427,8 @@ async function runBattleSimulations() {
                 teamPokemon, teamMoves,
                 currentOpponent, opponentMoves,
                 shieldCount,
-                battleSimulationState.p1ShieldAI,
-                battleSimulationState.p2ShieldAI
+                battleSimulationState.shieldAI,
+                battleSimulationState.shieldAI
             );
 
             console.log(`Battle result for ${teamPokemon.name}:`, battleResult);
@@ -1532,7 +1532,8 @@ async function runSingleBattle(teamPokemon, teamMoves, opponentPokemon, opponent
         p1_shields: shieldCount,
         p2_shields: shieldCount,
         p1_shield_ai: p1ShieldAI || 'smart_30',
-        p2_shield_ai: p2ShieldAI || 'smart_30'
+        p2_shield_ai: p2ShieldAI || 'smart_30',
+        cp_cap: battleSimulationState.cpCap
     };
 
     console.log('Battle data before cleanup:', battleData);
@@ -1608,29 +1609,45 @@ function updateTeamSlotBorders(results, bestRating) {
     });
 }
 
-// Initialize shield AI selectors
-function initShieldAISelectors() {
-    const p1ShieldAI = document.getElementById('p1ShieldAI');
-    const p2ShieldAI = document.getElementById('p2ShieldAI');
+// Clear battle cache when league changes
+function clearBattleCache() {
+    battleSimulationState.simulations = {};
+    console.log('Battle cache cleared');
+}
+
+// Initialize league selector and shield AI selector
+function initLeagueAndShieldSelectors() {
+    const leagueSelect = document.getElementById('leagueSelect');
+    const shieldAI = document.getElementById('shieldAI');
     
-    if (p1ShieldAI && p2ShieldAI) {
-        // Set initial values
-        p1ShieldAI.value = battleSimulationState.p1ShieldAI;
-        p2ShieldAI.value = battleSimulationState.p2ShieldAI;
+    if (leagueSelect) {
+        // Set initial value
+        leagueSelect.value = battleSimulationState.cpCap || 1500;
         
-        // Add event listeners
-        p1ShieldAI.addEventListener('change', function() {
-            battleSimulationState.p1ShieldAI = this.value;
-            console.log('P1 Shield AI changed to:', this.value);
+        // Add event listener
+        leagueSelect.addEventListener('change', function() {
+            const selectedCP = parseInt(this.value);
+            battleSimulationState.cpCap = selectedCP;
+            console.log('League changed to:', selectedCP);
+            
+            // Clear any cached data that might be CP-specific
+            clearBattleCache();
+            
             // Trigger battle simulation update if we have an opponent
             if (currentOpponent && userTeam.length > 0) {
                 runBattleSimulations();
             }
         });
+    }
+    
+    if (shieldAI) {
+        // Set initial value
+        shieldAI.value = battleSimulationState.shieldAI || 'smart_30';
         
-        p2ShieldAI.addEventListener('change', function() {
-            battleSimulationState.p2ShieldAI = this.value;
-            console.log('P2 Shield AI changed to:', this.value);
+        // Add event listener
+        shieldAI.addEventListener('change', function() {
+            battleSimulationState.shieldAI = this.value;
+            console.log('Shield AI changed to:', this.value);
             // Trigger battle simulation update if we have an opponent
             if (currentOpponent && userTeam.length > 0) {
                 runBattleSimulations();
@@ -1645,6 +1662,6 @@ document.addEventListener('DOMContentLoaded', function() {
     
     initBattleSimulations();
     
-    // Initialize shield AI selectors
-    initShieldAISelectors();
+    // Initialize league and shield AI selectors
+    initLeagueAndShieldSelectors();
 }); 

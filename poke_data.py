@@ -28,6 +28,9 @@ class PokeData:
         print(f"[DEBUG] Loaded PvPoke rank 1 stats for CP cap: {cp_cap}")
 
     def _get_rank1_path(self, cp_cap: int) -> str:
+        # For Master League (no CP cap), use the 10000 CP rankings
+        if cp_cap == 0:
+            return RANK1_PATH_TEMPLATE.format(10000)
         return RANK1_PATH_TEMPLATE.format(cp_cap)
 
     def _extract_pokemon_list(self, data: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -159,18 +162,29 @@ class PokeData:
 
     def _extract_rank1_ivs_from_gamemaster(self, pokemon_list, cp_cap: int):
         stats = {}
-        cp_key = f'cp{cp_cap}'
-        for p in pokemon_list:
-            sid = p.get('speciesId')
-            default_ivs = p.get('defaultIVs', {})
-            cp_entry = default_ivs.get(cp_key)
-            if cp_entry and len(cp_entry) == 4:
+        # For Master League (no CP cap), use level 50 with perfect IVs
+        if cp_cap == 0:
+            for p in pokemon_list:
+                sid = p.get('speciesId')
                 stats[sid] = {
-                    'level': cp_entry[0],
-                    'iv_atk': cp_entry[1],
-                    'iv_def': cp_entry[2],
-                    'iv_sta': cp_entry[3]
+                    'level': 50,
+                    'iv_atk': 15,
+                    'iv_def': 15,
+                    'iv_sta': 15
                 }
+        else:
+            cp_key = f'cp{cp_cap}'
+            for p in pokemon_list:
+                sid = p.get('speciesId')
+                default_ivs = p.get('defaultIVs', {})
+                cp_entry = default_ivs.get(cp_key)
+                if cp_entry and len(cp_entry) == 4:
+                    stats[sid] = {
+                        'level': cp_entry[0],
+                        'iv_atk': cp_entry[1],
+                        'iv_def': cp_entry[2],
+                        'iv_sta': cp_entry[3]
+                    }
         return stats
 
     def get_rank1_stats(self, species_id: str) -> Optional[Dict[str, Any]]:
