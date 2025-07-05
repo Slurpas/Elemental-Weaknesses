@@ -135,6 +135,7 @@ function displayPokemonInfo(pokemon) {
     document.getElementById('pokemonAttack').textContent = `ATK: ${pokemon.stats.attack}`;
     document.getElementById('pokemonDefense').textContent = `DEF: ${pokemon.stats.defense}`;
     displayEffectiveness(pokemon.effectiveness);
+    displayMoves(pokemon.pvp_moves, pokemon.types, true); // true = isOpponent
     showPokemonInfo();
     if (userTeam.length > 0) {
         updateTeamAnalysis();
@@ -168,7 +169,36 @@ function displayEffectiveness(effectiveness) {
         : '<span class="no-data">None</span>';
 }
 
-function displayMoves(pvpMoves) {
+function calculateEffectiveDPE(move, opponent, pokemonTypes = []) {
+    console.log('calculateEffectiveDPE called with:', { move, opponent: opponent.name, pokemonTypes });
+    if (!move.power || !move.energy || move.energy === 0) {
+        console.log('Missing power/energy, returning base DPE:', move.dpe);
+        return move.dpe;
+    }
+    
+    // Get base power and energy from move data
+    const basePower = move.power;
+    const energy = move.energy;
+    
+    // Apply STAB if move type matches Pokémon type
+    const stabMultiplier = pokemonTypes.includes(move.type) ? 1.2 : 1.0;
+    
+    // Get type effectiveness against the opponent
+    let typeMultiplier = 1.0;
+    if (move.type && opponent.types) {
+        // Calculate effectiveness of this move type against opponent types
+        const effectiveness = calculateMoveEffectiveness(move, opponent.types);
+        typeMultiplier = effectiveness.multiplier;
+    }
+    
+    // Calculate effective damage
+    const effectiveDamage = basePower * stabMultiplier * typeMultiplier;
+    const effectiveDPE = effectiveDamage / energy;
+    
+    return effectiveDPE.toFixed(2);
+}
+
+function displayMoves(pvpMoves, pokemonTypes = [], isOpponent = false) {
     const movesList = document.getElementById('movesList');
     let html = '';
     if (pvpMoves && pvpMoves.length > 0) {
@@ -179,15 +209,27 @@ function displayMoves(pvpMoves) {
             if (move.effectiveness) {
                 if (move.effectiveness.label === 'Super Effective') effClass = 'move-eff-super';
                 else if (move.effectiveness.label === 'Not Very Effective') effClass = 'move-eff-notvery';
-                else if (move.effectiveness.label === 'Immune') effClass = 'move-eff-immune';
                 else effClass = 'move-eff-neutral';
             }
+            // Calculate effective DPE if we have opponent data (only for team Pokémon, not opponent)
+            let effectiveDpeDisplay = '';
+            if (!isOpponent && move.dpe && move.move_class === 'charged' && currentOpponent) {
+                const baseDpe = parseFloat(move.dpe);
+                const effectiveDpe = parseFloat(calculateEffectiveDPE(move, currentOpponent, pokemonTypes));
+                if (effectiveDpe !== baseDpe) {
+                    const modifier = effectiveDpe - baseDpe;
+                    const modifierSign = modifier > 0 ? '+' : '';
+                    effectiveDpeDisplay = `<span class="move-effective-dpe">(${effectiveDpe.toFixed(2)} ${modifierSign}${modifier.toFixed(2)} vs ${currentOpponent.name})</span>`;
+                }
+            }
+            
             return `
             <div class="move-item">
                 <div class="move-info">
                     <span class="move-name">${move.name}</span>
                     <span class="type-badge type-${move.type}">${move.type}</span>
                     <span class="move-type">(${move.move_class === 'fast' ? 'Fast Move' : 'Charged Move'})</span>
+                    ${!isOpponent && move.dpe ? `<span class="move-dpe">DPE: ${move.dpe}${effectiveDpeDisplay}</span>` : ''}
                     <span class="move-effectiveness ${effClass}">${move.effectiveness ? move.effectiveness.label : ''}</span>
                 </div>
             </div>
@@ -276,6 +318,171 @@ teamModalSearch.addEventListener('input', (e) => {
     }, 150);
 });
 
+// Move selector functionality
+let currentMoveSelector = null;
+
+window.openMoveSelector = function(slotNumber, currentMoveName, moveClass) {
+    currentMoveSelector = { slotNumber, currentMoveName, moveClass, currentMoveName };
+    
+    // Get the Pokémon in this slot
+    const pokemon = userTeam.find(p => p.slot === slotNumber);
+    if (!pokemon) return;
+    
+    // Get all available moves for this Pokémon
+    fetch(`/api/pokemon/${pokemon.name}/moves`)
+        .then(res => res.json())
+        .then(data => {
+            if (data.error) {
+                alert('Failed to load moves');
+                return;
+            }
+            
+            const moves = moveClass === 'fast' ? data.fast_moves : data.charged_moves;
+            showMoveSelector(moves, currentMoveName, moveClass);
+        })
+        .catch(error => {
+            console.error('Error loading moves:', error);
+            alert('Failed to load moves');
+        });
+};
+
+function showMoveSelector(moves, currentMoveName, moveClass) {
+    // Create modal if it doesn't exist
+    let modal = document.getElementById('moveSelectorModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'moveSelectorModal';
+        modal.className = 'modal hidden';
+        modal.innerHTML = `
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Select ${moveClass === 'fast' ? 'Fast' : 'Charged'} Move</h3>
+                    <button class="close-btn" onclick="closeMoveSelector()">×</button>
+                </div>
+                <div class="modal-body">
+                    <div id="moveSelectorList"></div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        
+        // Close modal when clicking outside
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) closeMoveSelector();
+        });
+    }
+    
+    // Populate moves list
+    const movesList = document.getElementById('moveSelectorList');
+    movesList.innerHTML = moves.map(move => `
+        <div class="move-selector-item ${move.name === currentMoveName ? 'selected' : ''}" 
+             onclick="selectMove('${move.name}')">
+            <div class="move-selector-name">${move.name}</div>
+            <div class="move-selector-details">
+                <span class="type-badge type-${move.type}">${move.type}</span>
+                ${move.power ? `<span class="move-power">${move.power} power</span>` : ''}
+                ${move.energy ? `<span class="move-energy">${move.energy} energy</span>` : ''}
+                ${move.energyGain ? `<span class="move-energy-gain">+${move.energyGain} energy</span>` : ''}
+            </div>
+        </div>
+    `).join('');
+    
+    // Show modal
+    modal.classList.remove('hidden');
+}
+
+window.selectMove = function(moveName) {
+    if (!currentMoveSelector) return;
+    
+    const { slotNumber, moveClass } = currentMoveSelector;
+    const pokemon = userTeam.find(p => p.slot === slotNumber);
+    
+    if (!pokemon) return;
+    
+    // Get the move details from the API to update the pvp_moves array
+    fetch(`/api/pokemon/${pokemon.name}/moves`)
+        .then(res => res.json())
+        .then(data => {
+            if (data.error) {
+                alert('Failed to load move details');
+                return;
+            }
+            
+            // Find the selected move in the API response
+            const allMoves = [...(data.fast_moves || []), ...(data.charged_moves || [])];
+            const selectedMove = allMoves.find(m => m.name === moveName);
+            
+            if (!selectedMove) {
+                alert('Move not found');
+                return;
+            }
+            
+            console.log('Selected move before processing:', selectedMove);
+            
+            // Ensure the selected move has all necessary properties for DPE calculation
+            if (selectedMove.move_class === 'charged' || moveClass === 'charged') {
+                // Set move_class if not present
+                selectedMove.move_class = 'charged';
+                
+                // Ensure power and energy are available for effective DPE calculation
+                if (!selectedMove.power && selectedMove.power !== 0) {
+                    selectedMove.power = 0; // Default if not provided
+                }
+                if (!selectedMove.energy && selectedMove.energy !== 0) {
+                    selectedMove.energy = 1; // Default if not provided
+                }
+                
+                // Calculate DPE if not provided
+                if (!selectedMove.dpe) {
+                    selectedMove.dpe = (selectedMove.power / selectedMove.energy).toFixed(2);
+                }
+            } else {
+                // Set move_class for fast moves
+                selectedMove.move_class = 'fast';
+            }
+            
+            console.log('Selected move after processing:', selectedMove);
+            
+            // Update the pvp_moves array - replace the specific move that was clicked
+            const currentMoveName = currentMoveSelector.currentMoveName;
+            const moveIndex = pokemon.pvp_moves.findIndex(m => m.name === currentMoveName);
+            
+            if (moveIndex !== -1) {
+                // Replace the specific move that was clicked
+                pokemon.pvp_moves[moveIndex] = selectedMove;
+            } else {
+                // If not found, add it to the appropriate position
+                if (moveClass === 'fast') {
+                    pokemon.pvp_moves.unshift(selectedMove);
+                } else {
+                    pokemon.pvp_moves.push(selectedMove);
+                }
+            }
+            
+            // Update the UI
+            updateTeamSlot(slotNumber, pokemon);
+            closeMoveSelector();
+            
+            // Force refresh of all team slots to update DPE displays
+            refreshTeamMovesDisplay();
+            
+            // Re-run battle simulations
+            onSelectionChange();
+        })
+        .catch(error => {
+            console.error('Error updating move:', error);
+            alert('Failed to update move');
+        });
+};
+
+window.closeMoveSelector = function() {
+    const modal = document.getElementById('moveSelectorModal');
+    if (modal) {
+        modal.classList.add('hidden');
+    }
+    currentMoveSelector = null;
+};
+
 // Helper to get sprite id from name (works for most forms)
 function getSpriteId(name) {
     return name;
@@ -348,21 +555,52 @@ function updateTeamSlot(slotNumber, pokemon, movesEffectiveness = null, isBestCo
                             const moveEffectiveness = movesEffectiveness.find(m => m.move.name === move.name);
                             if (moveEffectiveness) {
                                 let effClass = '';
-                                if (moveEffectiveness.effectiveness.label === 'Super Effective') effClass = 'move-eff-super';
-                                else if (moveEffectiveness.effectiveness.label === 'Not Very Effective') effClass = 'move-eff-notvery';
-                                else if (moveEffectiveness.effectiveness.label === 'Immune') effClass = 'move-eff-immune';
-                                else effClass = 'move-eff-neutral';
+                                                        if (moveEffectiveness.effectiveness.label === 'Super Effective') effClass = 'move-eff-super';
+                        else if (moveEffectiveness.effectiveness.label === 'Not Very Effective') effClass = 'move-eff-notvery';
+                        else effClass = 'move-eff-neutral';
                                 effectivenessHTML = `<span class="move-effectiveness ${effClass}">${moveEffectiveness.effectiveness.label}</span>`;
                             }
                         }
                         
+                        // Calculate effective DPE for team moves
+                        let effectiveDpeDisplay = '';
+                        if (move.dpe && move.move_class === 'charged') {
+                            const baseDpe = parseFloat(move.dpe);
+                            if (currentOpponent) {
+                                const effectiveDpe = parseFloat(calculateEffectiveDPE(move, currentOpponent, pokemon.types));
+                                if (effectiveDpe !== baseDpe) {
+                                    const modifier = effectiveDpe - baseDpe;
+                                    const modifierSign = modifier > 0 ? '+' : '';
+                                    
+                                    // Calculate type effectiveness multiplier
+                                    const effectivenessMultiplier = effectiveDpe / baseDpe;
+                                    let effectivenessClass = '';
+                                    
+                                    if (effectivenessMultiplier >= 2.0) {
+                                        effectivenessClass = 'dpe-super-effective'; // Bold green for 2x+
+                                    } else if (effectivenessMultiplier >= 1.5) {
+                                        effectivenessClass = 'dpe-effective'; // Green for 1.5x+
+                                    } else if (effectivenessMultiplier <= 0.25) {
+                                        effectivenessClass = 'dpe-double-resisted'; // Super red for 0.25x
+                                    } else if (effectivenessMultiplier < 1.0) {
+                                        effectivenessClass = 'dpe-resisted'; // Fairly red for <1x
+                                    } else {
+                                        effectivenessClass = 'dpe-neutral'; // Normal for 1x
+                                    }
+                                    
+                                    effectiveDpeDisplay = `<span class="move-effective-dpe ${effectivenessClass}">(${baseDpe.toFixed(2)} ${modifierSign}${modifier.toFixed(2)} vs ${currentOpponent.name})</span>`;
+                                }
+                            }
+                        }
+                        
                         return `
-                            <div class="move-item">
+                            <div class="move-item" onclick="event.stopPropagation(); openMoveSelector('${slotNumber}', '${move.name}', '${move.move_class}')">
                                 <div class="move-info">
                                     <div class="move-name">${move.name}</div>
                                     <div class="move-details">
                                         <span class="type-badge type-${move.type}">${move.type}</span>
                                         <span class="move-type">(${move.move_class === 'fast' ? 'Fast Move' : 'Charged Move'})</span>
+                                        ${move.dpe ? `<span class="move-dpe">DPE: ${currentOpponent && move.move_class === 'charged' ? parseFloat(calculateEffectiveDPE(move, currentOpponent, pokemon.types)).toFixed(2) : move.dpe}${effectiveDpeDisplay}</span>` : (move.move_class === 'charged' && move.power && move.energy) ? `<span class="move-dpe">DPE: ${currentOpponent ? parseFloat(calculateEffectiveDPE(move, currentOpponent, pokemon.types)).toFixed(2) : (move.power / move.energy).toFixed(2)}${effectiveDpeDisplay}</span>` : ''}
                                         ${effectivenessHTML}
                                     </div>
                                 </div>
@@ -401,35 +639,40 @@ function updateTeamSlot(slotNumber, pokemon, movesEffectiveness = null, isBestCo
                 ratingColor = 'neutral';
             } else if (teamHpRemaining > 0 && opponentHpRemaining === 0) {
                 // Your Pokémon won - opponent fainted
-                const hpPercent = Math.round((teamHpRemaining / pokemon.stats.hp) * 100);
+                const maxHp = battleResult.battleResult.p1_max_hp || pokemon.stats?.hp || 100;
+                const hpPercent = Math.round((teamHpRemaining / maxHp) * 100);
                 ratingDisplay = `${hpPercent}% HP`;
                 winnerText = 'Wins';
                 winnerClass = 'wins';
                 ratingColor = hpPercent > 50 ? 'excellent' : hpPercent > 25 ? 'good' : 'close';
             } else if (opponentHpRemaining > 0 && teamHpRemaining === 0) {
                 // Opponent won - your Pokémon fainted
-                const hpPercent = Math.round((opponentHpRemaining / currentOpponent.stats.hp) * 100);
+                const maxHp = battleResult.battleResult.p2_max_hp || currentOpponent.stats?.hp || 100;
+                const hpPercent = Math.round((opponentHpRemaining / maxHp) * 100);
                 ratingDisplay = `${hpPercent}% HP`;
                 winnerText = 'Loses';
                 winnerClass = 'loses';
                 ratingColor = hpPercent > 50 ? 'bad' : hpPercent > 25 ? 'close-loss' : 'close';
             } else if (teamHpRemaining > opponentHpRemaining) {
                 // Your Pokémon won with more HP remaining
-                const hpPercent = Math.round((teamHpRemaining / pokemon.stats.hp) * 100);
+                const maxHp = battleResult.battleResult.p1_max_hp || pokemon.stats?.hp || 100;
+                const hpPercent = Math.round((teamHpRemaining / maxHp) * 100);
                 ratingDisplay = `${hpPercent}% HP`;
                 winnerText = 'Wins';
                 winnerClass = 'wins';
                 ratingColor = hpPercent > 50 ? 'excellent' : hpPercent > 25 ? 'good' : 'close';
             } else if (opponentHpRemaining > teamHpRemaining) {
                 // Opponent won with more HP remaining
-                const hpPercent = Math.round((opponentHpRemaining / currentOpponent.stats.hp) * 100);
+                const maxHp = battleResult.battleResult.p2_max_hp || currentOpponent.stats?.hp || 100;
+                const hpPercent = Math.round((opponentHpRemaining / maxHp) * 100);
                 ratingDisplay = `${hpPercent}% HP`;
                 winnerText = 'Loses';
                 winnerClass = 'loses';
                 ratingColor = hpPercent > 50 ? 'bad' : hpPercent > 25 ? 'close-loss' : 'close';
             } else {
                 // Equal HP remaining (very rare)
-                const hpPercent = Math.round((teamHpRemaining / pokemon.stats.hp) * 100);
+                const maxHp = battleResult.battleResult.p1_max_hp || pokemon.stats?.hp || 100;
+                const hpPercent = Math.round((teamHpRemaining / maxHp) * 100);
                 ratingDisplay = `${hpPercent}% HP`;
                 winnerText = 'Tie';
                 winnerClass = 'tie';
@@ -567,13 +810,131 @@ document.addEventListener('click', (e) => {
     }
 });
 
-// Add some CSS for the no-data class
+// Add some CSS for the no-data class and move selector
 const style = document.createElement('style');
 style.textContent = `
     .no-data {
         color: #999;
         font-style: italic;
         padding: 10px;
+    }
+    
+    .move-selector-item {
+        padding: 10px;
+        border: 1px solid #ddd;
+        margin: 5px 0;
+        border-radius: 5px;
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
+    
+    .move-selector-item:hover {
+        background-color: #f5f5f5;
+    }
+    
+    .move-selector-item.selected {
+        background-color: #e3f2fd;
+        border-color: #2196f3;
+    }
+    
+    .move-selector-name {
+        font-weight: bold;
+        margin-bottom: 5px;
+    }
+    
+    .move-selector-details {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        font-size: 0.9em;
+        color: #666;
+    }
+    
+    .move-item {
+        cursor: pointer;
+        transition: background-color 0.2s;
+        border-radius: 3px;
+        padding: 2px;
+    }
+    
+    .move-item:hover {
+        background-color: #f0f0f0;
+    }
+    
+    .matchup-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 10px;
+        font-size: 0.9em;
+    }
+    
+    .matchup-table th,
+    .matchup-table td {
+        border: 1px solid #ddd;
+        padding: 8px;
+        text-align: center;
+    }
+    
+    .matchup-table th {
+        background-color: #f5f5f5;
+        font-weight: bold;
+    }
+    
+    .matchup-table td:first-child {
+        text-align: left;
+        font-weight: bold;
+    }
+    
+    #opponentMatchupTable {
+        margin-top: 20px;
+        padding: 15px;
+        background-color: #f9f9f9;
+        border-radius: 5px;
+    }
+    
+    #opponentMatchupTable h3 {
+        margin-top: 0;
+        margin-bottom: 15px;
+        color: #333;
+    }
+    
+    /* DPE Effectiveness Color Coding */
+    .move-effective-dpe.dpe-super-effective {
+        color: #00aa00;
+        font-weight: bold;
+        background-color: #e8f5e8;
+        padding: 2px 4px;
+        border-radius: 3px;
+    }
+    
+    .move-effective-dpe.dpe-effective {
+        color: #008800;
+        font-weight: bold;
+        background-color: #f0f8f0;
+        padding: 2px 4px;
+        border-radius: 3px;
+    }
+    
+    .move-effective-dpe.dpe-neutral {
+        color: #666;
+        background-color: #f5f5f5;
+        padding: 2px 4px;
+        border-radius: 3px;
+    }
+    
+    .move-effective-dpe.dpe-resisted {
+        color: #cc0000;
+        background-color: #ffe8e8;
+        padding: 2px 4px;
+        border-radius: 3px;
+    }
+    
+    .move-effective-dpe.dpe-double-resisted {
+        color: #990000;
+        font-weight: bold;
+        background-color: #ffcccc;
+        padding: 2px 4px;
+        border-radius: 3px;
     }
 `;
 document.head.appendChild(style);
@@ -701,17 +1062,44 @@ function calculateTeamScores(teamMovesVsOpponent) {
 }
 
 function calculateMoveEffectiveness(move, defendingTypes) {
-    // This is a simplified version - you might want to use the actual effectiveness calculation from your backend
-    const effectiveness = currentOpponent.effectiveness.effectiveness[move.type] || 1;
+    // Calculate type effectiveness of move.type against defendingTypes
+    let multiplier = 1.0;
     
-    if (effectiveness > 1) {
-        return { label: 'Super Effective' };
-    } else if (effectiveness < 1 && effectiveness > 0) {
-        return { label: 'Not Very Effective' };
-    } else if (effectiveness === 0) {
-        return { label: 'Immune' };
+    // Type effectiveness chart (simplified)
+    const effectivenessChart = {
+        'normal': { 'rock': 0.5, 'ghost': 0, 'steel': 0.5 },
+        'fire': { 'fire': 0.5, 'water': 0.5, 'grass': 2, 'ice': 2, 'bug': 2, 'rock': 0.5, 'dragon': 0.5, 'steel': 2 },
+        'water': { 'fire': 2, 'water': 0.5, 'grass': 0.5, 'ground': 2, 'rock': 2, 'dragon': 0.5 },
+        'electric': { 'water': 2, 'electric': 0.5, 'grass': 0.5, 'ground': 0, 'flying': 2, 'dragon': 0.5 },
+        'grass': { 'fire': 0.5, 'water': 2, 'grass': 0.5, 'poison': 0.5, 'ground': 2, 'flying': 0.5, 'bug': 0.5, 'rock': 2, 'dragon': 0.5, 'steel': 0.5 },
+        'ice': { 'fire': 0.5, 'water': 0.5, 'grass': 2, 'ice': 0.5, 'ground': 2, 'flying': 2, 'dragon': 2, 'steel': 0.5 },
+        'fighting': { 'normal': 2, 'ice': 2, 'poison': 0.5, 'flying': 0.5, 'psychic': 0.5, 'bug': 0.5, 'rock': 2, 'ghost': 0, 'steel': 2, 'fairy': 0.5 },
+        'poison': { 'grass': 2, 'poison': 0.5, 'ground': 0.5, 'rock': 0.5, 'ghost': 0.5, 'steel': 0, 'fairy': 2 },
+        'ground': { 'fire': 2, 'electric': 2, 'grass': 0.5, 'poison': 2, 'flying': 0, 'bug': 0.5, 'rock': 2, 'steel': 2 },
+        'flying': { 'electric': 0.5, 'grass': 2, 'fighting': 2, 'bug': 2, 'rock': 0.5, 'steel': 0.5 },
+        'psychic': { 'fighting': 2, 'poison': 2, 'psychic': 0.5, 'dark': 0, 'steel': 0.5 },
+        'bug': { 'fire': 0.5, 'grass': 2, 'fighting': 0.5, 'poison': 0.5, 'flying': 0.5, 'psychic': 2, 'ghost': 0.5, 'dark': 2, 'steel': 0.5, 'fairy': 0.5 },
+        'rock': { 'fire': 2, 'ice': 2, 'fighting': 0.5, 'ground': 0.5, 'flying': 2, 'bug': 2, 'steel': 0.5 },
+        'ghost': { 'normal': 0, 'psychic': 2, 'ghost': 2, 'dark': 0.5 },
+        'dragon': { 'dragon': 2, 'steel': 0.5, 'fairy': 0 },
+        'dark': { 'fighting': 0.5, 'psychic': 2, 'ghost': 2, 'dark': 0.5, 'fairy': 0.5 },
+        'steel': { 'fire': 0.5, 'water': 0.5, 'electric': 0.5, 'ice': 2, 'rock': 2, 'steel': 0.5, 'fairy': 2 },
+        'fairy': { 'fighting': 2, 'poison': 0.5, 'dragon': 2, 'dark': 2, 'steel': 0.5 }
+    };
+    
+    // Calculate effectiveness against each defending type
+    defendingTypes.forEach(defendingType => {
+        if (effectivenessChart[move.type] && effectivenessChart[move.type][defendingType]) {
+            multiplier *= effectivenessChart[move.type][defendingType];
+        }
+    });
+    
+    if (multiplier > 1) {
+        return { label: 'Super Effective', multiplier: multiplier };
+    } else if (multiplier < 1 && multiplier > 0) {
+        return { label: 'Not Very Effective', multiplier: multiplier };
     } else {
-        return { label: 'Neutral' };
+        return { label: 'Neutral', multiplier: 1.0 };
     }
 }
 
@@ -731,7 +1119,6 @@ function renderOpponentMovesVsTeam(opponentMovesVsTeam, teamNames) {
                 let effClass = '';
                 if (cell.effectiveness.label === 'Super Effective') effClass = 'move-eff-super';
                 else if (cell.effectiveness.label === 'Not Very Effective') effClass = 'move-eff-notvery';
-                else if (cell.effectiveness.label === 'Immune') effClass = 'move-eff-immune';
                 else effClass = 'move-eff-neutral';
                 html += `<td><span class="move-effectiveness ${effClass}">${cell.effectiveness.label}</span></td>`;
             });
@@ -750,9 +1137,19 @@ function renderOpponentMovesVsTeam(opponentMovesVsTeam, teamNames) {
 }
 
 // Hook into selection changes
+function refreshTeamMovesDisplay() {
+    // Refresh moves display for all team Pokémon to update effective DPE
+    userTeam.forEach(pokemon => {
+        // Force a complete refresh of the team slot to recalculate DPE
+        updateTeamSlot(pokemon.slot, pokemon, null, false);
+    });
+}
+
 function onSelectionChange() {
     if (currentOpponent && userTeam.length > 0) {
         runBattleSimulations();
+        refreshTeamMovesDisplay();
+        updateMatchupAnalysis(); // Add matchup analysis
     } else {
         // Clear effectiveness from team slots when no opponent
         userTeam.forEach(pokemon => {
@@ -760,6 +1157,15 @@ function onSelectionChange() {
         });
         // Clear battle results
         window.currentBattleResults = null;
+        
+        // Clear matchup table
+        const matchupTable = document.getElementById('opponentMatchupTable');
+        if (matchupTable) {
+            matchupTable.innerHTML = '';
+        }
+        
+        // Refresh team moves display to show base DPE without opponent
+        refreshTeamMovesDisplay();
     }
 }
 

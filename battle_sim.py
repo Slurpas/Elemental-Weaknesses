@@ -154,7 +154,9 @@ class BattlePokemon:
     
     def take_damage(self, damage: int):
         """Take damage and update HP"""
+        old_hp = self.hp
         self.hp = max(0, self.hp - damage)
+        print(f"[DEBUG] {self.data['speciesId']} took {damage} damage: {old_hp} -> {self.hp} HP")
     
     def gain_energy(self, energy: int):
         """Gain energy"""
@@ -241,6 +243,8 @@ class BattleSimulator:
             "winner": winner,
             "p1_final_hp": p1.hp,
             "p2_final_hp": p2.hp,
+            "p1_max_hp": p1.max_hp,
+            "p2_max_hp": p2.max_hp,
             "p1_final_energy": p1.energy,
             "p2_final_energy": p2.energy,
             "turns": turn,
@@ -350,14 +354,18 @@ class BattleSimulator:
         stab = DamageMultiplier.STAB if move_type in attacker.data.get("types", []) else 1.0
         
         # Calculate damage using PvPoke formula
-        damage = math.floor(
+        raw_damage = (
             move["power"] * 
             stab * 
             (attacker.get_effective_atk() / defender.get_effective_def()) * 
             effectiveness * 
             0.5 * 
             DamageMultiplier.BONUS
-        ) + 1
+        )
+        damage = math.floor(raw_damage) + 1
+        
+        # Debug logging
+        print(f"[DEBUG] Damage calc for {move['name']}: power={move['power']}, stab={stab}, atk={attacker.get_effective_atk():.1f}, def={defender.get_effective_def():.1f}, effectiveness={effectiveness}, raw_damage={raw_damage:.3f}, final_damage={damage}")
         
         return max(1, damage)  # Minimum 1 damage
     
@@ -367,9 +375,9 @@ class BattleSimulator:
             return "tie", 0.5
         elif p1.is_fainted():
             # P2 wins
-            battle_rating = p2.hp / p2.max_hp
+            battle_rating = min(1.0, p2.hp / p2.max_hp)  # Cap at 100%
             return p2.data["speciesId"], battle_rating
         else:
             # P1 wins
-            battle_rating = p1.hp / p1.max_hp
+            battle_rating = min(1.0, p1.hp / p1.max_hp)  # Cap at 100%
             return p1.data["speciesId"], battle_rating 

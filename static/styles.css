@@ -315,6 +315,23 @@ header p {
     color: #667eea;
 }
 
+.move-dpe {
+    color: #4CAF50;
+    font-size: 0.8rem;
+    font-weight: 600;
+    background: #e8f5e8;
+    padding: 2px 6px;
+    border-radius: 8px;
+    margin-left: 4px;
+}
+
+.move-effective-dpe {
+    color: #FF6B35;
+    font-size: 0.7rem;
+    font-weight: 500;
+    margin-left: 4px;
+}
+
 .loading {
     text-align: center;
     padding: 40px;
@@ -673,6 +690,16 @@ header p {
 .team-moves-list .move-effectiveness.move-eff-neutral {
     color: #666;
     background: #f8f9fa;
+}
+
+.team-moves-list .move-dpe {
+    color: #4CAF50;
+    font-size: 0.7rem;
+    font-weight: 600;
+    background: #e8f5e8;
+    padding: 2px 4px;
+    border-radius: 6px;
+    margin-left: 2px;
 }
 
 .pokemon-in-slot img {

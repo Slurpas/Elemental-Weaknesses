@@ -105,10 +105,22 @@ def get_pvp_moves_for_pokemon(name):
             move_id = move_name.upper().replace(' ', '_')
             move_details = poke_data.get_move_details(move_id)
             move_type = move_details.get('type', '') if move_details else ''
+            
+            # Calculate DPE for charge moves
+            dpe = None
+            if move_class == 'charged' and move_details:
+                power = move_details.get('power', 0)
+                energy = move_details.get('energy', 0)
+                if energy > 0:
+                    dpe = round(power / energy, 2)
+            
             moves.append({
                 'name': move_name,
                 'type': move_type,
-                'move_class': move_class
+                'move_class': move_class,
+                'dpe': dpe,
+                'power': move_details.get('power', 0) if move_details else 0,
+                'energy': move_details.get('energy', 0) if move_details else 0
             })
     return moves
 
@@ -133,9 +145,7 @@ def get_move_effectiveness(move_type, defender_types):
     # Use get_type_effectiveness to get the effectiveness dict for the defender
     eff = get_type_effectiveness(defender_types)
     multiplier = eff['effectiveness'].get(move_type, 1.0)
-    if multiplier == 0:
-        label = 'Immune'
-    elif multiplier > 1:
+    if multiplier > 1:
         label = 'Super Effective'
     elif multiplier < 1:
         label = 'Not Very Effective'
@@ -554,6 +564,11 @@ def get_pokemon_moves(name):
                 'charged1': moves_data['charged_moves'][0]['id'] if moves_data['charged_moves'] else None,
                 'charged2': moves_data['charged_moves'][1]['id'] if len(moves_data['charged_moves']) > 1 else None
             }
+        
+        # Calculate DPE for charged moves
+        for move in moves_data['charged_moves']:
+            if 'power' in move and 'energy' in move and move['energy'] > 0:
+                move['dpe'] = round(move['power'] / move['energy'], 2)
         
         return jsonify({
             'pokemon': {
