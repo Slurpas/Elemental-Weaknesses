@@ -564,6 +564,9 @@ function updateTeamSlot(slotNumber, pokemon, movesEffectiveness = null, isBestCo
                         
                         // Calculate effective DPE for team moves
                         let effectiveDpeDisplay = '';
+                        let moveRankingClass = '';
+                        let rankingBadge = '';
+                        
                         if (move.dpe && move.move_class === 'charged') {
                             const baseDpe = parseFloat(move.dpe);
                             if (currentOpponent) {
@@ -593,10 +596,60 @@ function updateTeamSlot(slotNumber, pokemon, movesEffectiveness = null, isBestCo
                             }
                         }
                         
+                        // Calculate move ranking for charged moves
+                        if (move.move_class === 'charged' && currentOpponent && pokemon.pvp_moves) {
+                            const chargedMoves = pokemon.pvp_moves.filter(m => m.move_class === 'charged' && m.dpe);
+                            if (chargedMoves.length > 1) {
+                                // Calculate effective DPE for all charged moves
+                                const moveRankings = chargedMoves.map(m => {
+                                    const baseDpe = parseFloat(m.dpe);
+                                    const effectiveDpe = parseFloat(calculateEffectiveDPE(m, currentOpponent, pokemon.types));
+                                    return { move: m, effectiveDpe, baseDpe };
+                                }).sort((a, b) => b.effectiveDpe - a.effectiveDpe);
+                                
+                                // Find this move's rank
+                                const currentMoveRank = moveRankings.findIndex(r => r.move.name === move.name);
+                                const bestMove = moveRankings[0];
+                                const currentMove = moveRankings[currentMoveRank];
+                                
+                                if (currentMoveRank >= 0) {
+                                    // Calculate percentage difference from best
+                                    const percentageDiff = ((currentMove.effectiveDpe - bestMove.effectiveDpe) / bestMove.effectiveDpe) * 100;
+                                    
+                                    // Assign ranking class and badge based on percentage difference
+                                    if (currentMoveRank === 0) {
+                                        moveRankingClass = 'move-best';
+                                        rankingBadge = '<span class="ranking-badge ranking-gold">🥇</span>';
+                                    } else if (percentageDiff >= -10) {
+                                        // Within 10% of best - excellent
+                                        moveRankingClass = 'move-excellent';
+                                        rankingBadge = '<span class="ranking-badge ranking-silver">🥈</span>';
+                                    } else if (percentageDiff >= -25) {
+                                        // Within 25% of best - good
+                                        moveRankingClass = 'move-good';
+                                        rankingBadge = '<span class="ranking-badge ranking-bronze">🥉</span>';
+                                    } else if (percentageDiff >= -50) {
+                                        // Within 50% of best - mediocre
+                                        moveRankingClass = 'move-mediocre';
+                                        rankingBadge = '<span class="ranking-badge ranking-mediocre">⚠️</span>';
+                                    } else {
+                                        // More than 50% worse than best - poor
+                                        moveRankingClass = 'move-poor';
+                                        rankingBadge = '<span class="ranking-badge ranking-poor">❌</span>';
+                                    }
+                                    
+                                    // Add percentage indicator for non-best moves
+                                    if (currentMoveRank > 0) {
+                                        rankingBadge += `<span class="ranking-percentage">${percentageDiff.toFixed(1)}%</span>`;
+                                    }
+                                }
+                            }
+                        }
+                        
                         return `
-                            <div class="move-item" onclick="event.stopPropagation(); openMoveSelector('${slotNumber}', '${move.name}', '${move.move_class}')">
+                            <div class="move-item ${moveRankingClass}" onclick="event.stopPropagation(); openMoveSelector('${slotNumber}', '${move.name}', '${move.move_class}')">
                                 <div class="move-info">
-                                    <div class="move-name">${move.name}</div>
+                                    <div class="move-name">${rankingBadge}${move.name}</div>
                                     <div class="move-details">
                                         <span class="type-badge type-${move.type}">${move.type}</span>
                                         <span class="move-type">(${move.move_class === 'fast' ? 'Fast Move' : 'Charged Move'})</span>
@@ -935,6 +988,69 @@ style.textContent = `
         background-color: #ffcccc;
         padding: 2px 4px;
         border-radius: 3px;
+    }
+    
+    /* Move Ranking System - Color Scale */
+    .move-item.move-best {
+        background-color: #d4edda;
+        border-left: 4px solid #28a745;
+        border: 2px solid #28a745;
+    }
+    
+    .move-item.move-excellent {
+        background-color: #e8f5e8;
+        border-left: 4px solid #00aa00;
+        border: 1px solid #00aa00;
+    }
+    
+    .move-item.move-good {
+        background-color: #fff3cd;
+        border-left: 4px solid #ffc107;
+        border: 1px solid #ffc107;
+    }
+    
+    .move-item.move-mediocre {
+        background-color: #ffeaa7;
+        border-left: 4px solid #f39c12;
+        border: 1px solid #f39c12;
+    }
+    
+    .move-item.move-poor {
+        background-color: #f8d7da;
+        border-left: 4px solid #dc3545;
+        border: 1px solid #dc3545;
+    }
+    
+    .ranking-badge {
+        margin-right: 8px;
+        font-size: 1.2em;
+    }
+    
+    .ranking-badge.ranking-gold {
+        color: #ffd700;
+    }
+    
+    .ranking-badge.ranking-silver {
+        color: #c0c0c0;
+    }
+    
+    .ranking-badge.ranking-bronze {
+        color: #cd7f32;
+    }
+    
+    .ranking-badge.ranking-mediocre {
+        color: #f39c12;
+    }
+    
+    .ranking-badge.ranking-poor {
+        color: #dc3545;
+    }
+    
+    .ranking-percentage {
+        font-size: 0.8em;
+        color: #666;
+        margin-left: 4px;
+        font-weight: bold;
     }
 `;
 document.head.appendChild(style);
