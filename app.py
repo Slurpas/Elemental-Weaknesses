@@ -5,10 +5,19 @@ from datetime import datetime, timedelta
 import re
 import csv
 import threading
+import html
+import secrets
+import os
 from poke_data import PokeData
 from battle_sim import BattleSimulator
 
 app = Flask(__name__)
+
+# Security: Generate a secret key for session management and CSRF protection
+app.secret_key = os.environ.get('SECRET_KEY') or secrets.token_hex(32)
+
+# Security: Disable debug mode in production
+app.config['DEBUG'] = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
 
 # Initialize local Pokémon data
 poke_data = PokeData()
@@ -42,6 +51,45 @@ def load_pvp_csv():
 
 # Call at startup
 load_pvp_csv()
+
+# Security: Input validation and sanitization functions
+def sanitize_input(input_str):
+    """Sanitize user input to prevent XSS and injection attacks"""
+    if not input_str:
+        return ""
+    # HTML escape to prevent XSS
+    return html.escape(str(input_str).strip())
+
+def sanitize_pokemon_name(name):
+    """Sanitize Pokemon name for lookup (no HTML escaping needed)"""
+    if not name:
+        return ""
+    # Just strip whitespace for Pokemon name lookup
+    return str(name).strip()
+
+def validate_pokemon_name(name):
+    """Validate Pokemon name to prevent path traversal and injection"""
+    if not name:
+        return False
+    # Allow alphanumeric, hyphens, underscores, spaces, and apostrophes for Pokemon names
+    if not re.match(r'^[a-zA-Z0-9\-\_\s\']+$', name):
+        return False
+    # Prevent path traversal attempts
+    if '..' in name or '/' in name or '\\' in name:
+        return False
+    return True
+
+def validate_search_query(query):
+    """Validate search query input"""
+    if not query:
+        return False
+    # Allow alphanumeric, spaces, hyphens, and common Pokemon name characters
+    if not re.match(r'^[a-zA-Z0-9\-\_\s\']+$', query):
+        return False
+    # Prevent path traversal
+    if '..' in query or '/' in query or '\\' in query:
+        return False
+    return True
 
 move_type_cache = {}
 move_type_cache_lock = threading.Lock()
@@ -157,21 +205,27 @@ def get_move_effectiveness(move_type, defender_types):
 def get_pokemon(name):
     """API endpoint to get Pokemon data (local gamemaster.json version)"""
     try:
-        print(f"DEBUG: Looking for Pokemon: {name}")
+        # Security: Validate and sanitize input
+        if not validate_pokemon_name(name):
+            print(f"DEBUG: Invalid Pokemon name: {name}")
+            return jsonify({'error': 'Invalid Pokemon name'}), 400
+        
+        sanitized_name = sanitize_pokemon_name(name)
+        print(f"DEBUG: Looking for Pokemon: {sanitized_name}")
         
         # Check cache first (but skip for now to ensure fresh data)
-        # cached_data = get_cached_pokemon(name.lower())
+        # cached_data = get_cached_pokemon(sanitized_name.lower())
         # if cached_data:
         #     return jsonify(cached_data)
 
         # Try to match by speciesId first, then by name
-        p = poke_data.get_by_species_id(name)
+        p = poke_data.get_by_species_id(sanitized_name)
         if not p:
             print(f"DEBUG: Not found by speciesId, trying by name")
-            p = poke_data.get_by_name(name)
+            p = poke_data.get_by_name(sanitized_name)
         if not p:
-            print(f"DEBUG: Pokemon not found: {name}")
-            return jsonify({'error': f'Pokemon not found: {name}'}), 404
+            print(f"DEBUG: Pokemon not found: {sanitized_name}")
+            return jsonify({'error': 'Pokemon not found'}), 404
         
         print(f"DEBUG: Found Pokemon: {p.get('speciesName', 'Unknown')} (ID: {p.get('speciesId', 'Unknown')})")
 
@@ -198,9 +252,9 @@ def get_pokemon(name):
 
         # Get PvP moves from CSV (if still desired)
         # Try with speciesName first, then with speciesId
-        pvp_moves = get_pvp_moves_for_pokemon(p.get('speciesName', name))
+        pvp_moves = get_pvp_moves_for_pokemon(p.get('speciesName', sanitized_name))
         if not pvp_moves:
-            pvp_moves = get_pvp_moves_for_pokemon(name)
+            pvp_moves = get_pvp_moves_for_pokemon(sanitized_name)
         
         for move in pvp_moves:
             if move['type']:
@@ -226,21 +280,31 @@ def get_pokemon(name):
         }
 
         # Cache the data
-        cache_pokemon(name.lower(), formatted_data)
+        cache_pokemon(sanitized_name.lower(), formatted_data)
 
         return jsonify(formatted_data)
 
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        # Security: Don't expose internal error details in production
+        if app.config['DEBUG']:
+            return jsonify({'error': str(e)}), 500
+        else:
+            return jsonify({'error': 'Internal server error'}), 500
 
 @app.route('/api/search/<query>')
 def search_pokemon(query):
     """API endpoint to search for Pokemon by name, including all forms (local gamemaster.json version)"""
     try:
+        # Security: Validate and sanitize input
+        if not validate_search_query(query):
+            return jsonify({'error': 'Invalid search query'}), 400
+        
+        sanitized_query = sanitize_pokemon_name(query)
+        
         # Use local data for all Pokémon
         all_pokemon = poke_data.pokemon
 
-        normalized_query = query.lower().replace(' ', '').replace('-', '')
+        normalized_query = sanitized_query.lower().replace(' ', '').replace('-', '')
         def norm(s):
             return s.lower().replace(' ', '').replace('-', '')
         
@@ -270,9 +334,12 @@ def search_pokemon(query):
 
     except Exception as e:
         print(f"Search error: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
+        if app.config['DEBUG']:
+            import traceback
+            traceback.print_exc()
+            return jsonify({'error': str(e)}), 500
+        else:
+            return jsonify({'error': 'Internal server error'}), 500
 
 def get_type_effectiveness(types):
     """Calculate type effectiveness for given Pokemon types using PokeAPI"""
@@ -617,10 +684,16 @@ def _validate_moveset(moveset, available_moves):
 def get_pokemon_moves(name):
     """Get all available moves and best moveset for a Pokémon."""
     try:
+        # Security: Validate and sanitize input
+        if not validate_pokemon_name(name):
+            return jsonify({'error': 'Invalid Pokemon name'}), 400
+        
+        sanitized_name = sanitize_pokemon_name(name)
+        
         # Try to match by speciesId first, then by name
-        p = poke_data.get_by_species_id(name)
+        p = poke_data.get_by_species_id(sanitized_name)
         if not p:
-            p = poke_data.get_by_species_id(name)
+            p = poke_data.get_by_species_id(sanitized_name)
         if not p:
             return jsonify({'error': 'Pokemon not found'}), 404
         
@@ -656,9 +729,26 @@ def get_pokemon_moves(name):
         })
         
     except Exception as e:
-        return jsonify({'error': f'Failed to get moves: {str(e)}'}), 500
+        # Security: Don't expose internal error details in production
+        if app.config['DEBUG']:
+            return jsonify({'error': f'Failed to get moves: {str(e)}'}), 500
+        else:
+            return jsonify({'error': 'Failed to get moves'}), 500
+
+# Security: Add security headers
+@app.after_request
+def add_security_headers(response):
+    """Add security headers to all responses"""
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'DENY'
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:;"
+    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+    return response
 
 if __name__ == '__main__':
     print("Starting Pokemon PvP Analyzer...")
     print("Open your browser and go to: http://localhost:5000")
-    app.run(debug=True, host='0.0.0.0', port=5000) 
+    # Security: Use environment variable for debug mode
+    debug_mode = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
+    app.run(debug=debug_mode, host='0.0.0.0', port=5000) 

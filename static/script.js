@@ -88,6 +88,7 @@ function displaySearchResults(pokemonList) {
     searchResults.innerHTML = pokemonList
         .map(pokemon => `
             <div class="search-result-item" onclick="selectPokemon('${pokemon.name}')">
+                <img src="${pokemon.sprite}" alt="${pokemon.name}" style="width: 30px; height: 30px; margin-right: 10px;" onerror="console.error('Failed to load search sprite:', this.src)">
                 ${pokemon.readable_name || (pokemon.name.charAt(0).toUpperCase() + pokemon.name.slice(1))}
             </div>
         `)
@@ -127,7 +128,11 @@ async function getPokemonData(name) {
 
 function displayPokemonInfo(pokemon) {
     currentOpponent = pokemon;
-    document.getElementById('pokemonSprite').src = pokemon.sprite;
+    console.log('Setting sprite for:', pokemon.name, 'URL:', pokemon.sprite);
+    const spriteElement = document.getElementById('pokemonSprite');
+    spriteElement.src = pokemon.sprite;
+    spriteElement.onerror = () => console.error('Failed to load main sprite:', pokemon.sprite);
+    spriteElement.onload = () => console.log('Successfully loaded main sprite:', pokemon.sprite);
     document.getElementById('pokemonName').textContent = pokemon.name.charAt(0).toUpperCase() + pokemon.name.slice(1);
     const typesContainer = document.getElementById('pokemonTypes');
     typesContainer.innerHTML = pokemon.types.map(type => `<span class="type-badge type-${type}">${type}</span>`).join('');
@@ -353,7 +358,7 @@ teamModalSearch.addEventListener('input', (e) => {
                 }
                 teamModalResults.innerHTML = data.map(pokemon => `
                     <div class="modal-result-item" onclick="window.selectTeamPokemonModal('${pokemon.name}')">
-                        <img class="modal-result-sprite" src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${getSpriteId(pokemon.name)}.png" alt="${pokemon.readable_name}" onerror="this.onerror=null;this.src='${placeholderSprite}';">
+                        <img class="modal-result-sprite" src="${pokemon.sprite}" alt="${pokemon.readable_name}" onerror="console.error('Failed to load modal sprite:', this.src)">
                         <span class="modal-result-name">${pokemon.readable_name || (pokemon.name.charAt(0).toUpperCase() + pokemon.name.slice(1))}</span>
                     </div>
                 `).join('');
@@ -802,7 +807,7 @@ function updateTeamSlot(slotNumber, pokemon, movesEffectiveness = null, isBestCo
             <div class="pokemon-in-slot">
                 <div class="pokemon-left-section">
                     <div class="pokemon-name">${pokemon.name}</div>
-                    <img src="${pokemon.sprite}" alt="${pokemon.name}">
+                    <img src="${pokemon.sprite}" alt="${pokemon.name}" onerror="console.error('Failed to load image:', this.src)" onload="console.log('Successfully loaded image:', this.src)">
                     <div class="pokemon-types">
                         ${pokemon.types.map(type => `<span class="type-badge type-${type}">${type}</span>`).join('')}
                     </div>
