@@ -345,6 +345,22 @@ header p {
     background: #868e96;
 }
 
+.type-badge.resist-single {
+    background: #b3e5fc;
+    border: 1px solid #0288d1;
+}
+
+.type-badge.resist-double {
+    background: #c8e6c9;
+    border: 1px solid #388e3c;
+}
+
+.type-badge.resist-triple {
+    background: #ffe082;
+    border: 1px solid #fbc02d;
+    font-weight: bold;
+}
+
 .moves-container h3 {
     font-size: 1.1rem;
     font-weight: 600;

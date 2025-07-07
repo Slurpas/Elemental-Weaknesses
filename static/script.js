@@ -195,29 +195,43 @@ function displayPokemonInfo(pokemon) {
 }
 
 function displayEffectiveness(effectiveness) {
+    // Debug log for effectiveness object
+    console.log('[DEBUG] Opponent Effectiveness:', effectiveness);
     // Weaknesses
-    const weaknessesList = document.getElementById('weaknessesList');
-    weaknessesList.innerHTML = effectiveness.weaknesses.length > 0 
-        ? effectiveness.weaknesses
-            .map(([type, mult]) => `<span class="type-badge type-${type} weakness">${type} (${mult}x)</span>`)
-            .join('')
-        : '<span class="no-data">None</span>';
-    
-    // Resistances
-    const resistancesList = document.getElementById('resistancesList');
-    resistancesList.innerHTML = effectiveness.resistances.length > 0
-        ? effectiveness.resistances
-            .map(([type, mult]) => `<span class="type-badge type-${type} resistance">${type} (${mult}x)</span>`)
-            .join('')
-        : '<span class="no-data">None</span>';
-    
-    // Double Resistances (no immunities in Go PvP)
-    const immunitiesList = document.getElementById('immunitiesList');
-    immunitiesList.innerHTML = effectiveness.double_resistances && effectiveness.double_resistances.length > 0
-        ? effectiveness.double_resistances
-            .map(([type, mult]) => `<span class="type-badge type-${type} double-resistance">${type} (${mult}x)</span>`)
-            .join('')
-        : '<span class="no-data">None</span>';
+    let weaknessesHtml = '';
+    if (effectiveness.weaknesses && effectiveness.weaknesses.length > 0) {
+        effectiveness.weaknesses.forEach(([type, mult]) => {
+            weaknessesHtml += `<span class="type-badge type-${type}" title="${mult}x">${type} (${mult}x)</span> `;
+        });
+    } else {
+        weaknessesHtml = '<span class="none">None</span>';
+    }
+    // Resistances (single, double, triple)
+    let resistancesHtml = '';
+    // Combine all resistances into one array
+    let allResistances = [];
+    if (effectiveness.resistances) allResistances = allResistances.concat(effectiveness.resistances);
+    if (effectiveness.double_resistances) allResistances = allResistances.concat(effectiveness.double_resistances);
+    if (effectiveness.triple_resistances) allResistances = allResistances.concat(effectiveness.triple_resistances);
+    // Sort by multiplier ascending (triple, double, single)
+    allResistances.sort((a, b) => a[1] - b[1]);
+    if (allResistances.length > 0) {
+        allResistances.forEach(([type, mult]) => {
+            let resistClass = '';
+            if (Math.abs(mult - 0.244) < 0.01) resistClass = 'resist-triple';
+            else if (Math.abs(mult - 0.391) < 0.01) resistClass = 'resist-double';
+            else if (Math.abs(mult - 0.625) < 0.01) resistClass = 'resist-single';
+            resistancesHtml += `<span class="type-badge type-${type} ${resistClass}" title="${mult}x">${type} (${mult}x)</span> `;
+        });
+    } else {
+        resistancesHtml = '<span class="none">None</span>';
+    }
+    // Update the DOM
+    document.querySelector('.effectiveness-weaknesses').innerHTML = weaknessesHtml;
+    document.querySelector('.effectiveness-resistances').innerHTML = resistancesHtml;
+    // Remove double resistances section if present
+    let doubleResistSection = document.querySelector('.effectiveness-double-resistances');
+    if (doubleResistSection) doubleResistSection.style.display = 'none';
 }
 
 function calculateEffectiveDPE(move, opponent, pokemonTypes = []) {
@@ -1257,24 +1271,22 @@ function calculateTeamCoverage() {
     const allTypes = ['normal', 'fire', 'water', 'electric', 'grass', 'ice', 'fighting', 
                      'poison', 'ground', 'flying', 'psychic', 'bug', 'rock', 'ghost', 
                      'dragon', 'dark', 'steel', 'fairy'];
-    
     // Initialize coverage
     allTypes.forEach(type => {
         coverage[type] = { count: 0, pokemon: [] };
     });
-    
     // Count how many Pokemon can hit each type effectively
     userTeam.forEach(pokemon => {
         if (pokemon.effectiveness && pokemon.effectiveness.effectiveness) {
             Object.entries(pokemon.effectiveness.effectiveness).forEach(([type, multiplier]) => {
-                if (multiplier > 1) {
+                if (multiplier > 1.0) {
                     coverage[type].count++;
                     coverage[type].pokemon.push(pokemon.name);
                 }
             });
         }
     });
-    
+    console.log('[DEBUG] Team Coverage:', coverage);
     return coverage;
 }
 
@@ -1303,24 +1315,20 @@ function calculateTeamWeaknesses() {
     const allTypes = ['normal', 'fire', 'water', 'electric', 'grass', 'ice', 'fighting', 
                      'poison', 'ground', 'flying', 'psychic', 'bug', 'rock', 'ghost', 
                      'dragon', 'dark', 'steel', 'fairy'];
-    
     const teamWeaknesses = {};
-    
     // For each type, check if it's super effective against any team member
     allTypes.forEach(attackingType => {
         let totalEffectiveness = 0;
         let affectedPokemon = [];
-        
         userTeam.forEach(pokemon => {
             if (pokemon.effectiveness && pokemon.effectiveness.effectiveness) {
                 const effectiveness = pokemon.effectiveness.effectiveness[attackingType] || 1;
-                if (effectiveness > 1) {
+                if (effectiveness > 1.0) {
                     totalEffectiveness += effectiveness;
                     affectedPokemon.push(pokemon.name);
                 }
             }
         });
-        
         if (totalEffectiveness > 0) {
             teamWeaknesses[attackingType] = {
                 effectiveness: totalEffectiveness,
@@ -1328,17 +1336,15 @@ function calculateTeamWeaknesses() {
             };
         }
     });
-    
     // Display team weaknesses
     const weaknessesList = document.getElementById('teamWeaknesses');
-    console.log('Looking for teamWeaknesses element:', weaknessesList);
+    console.log('[DEBUG] Team Weaknesses:', teamWeaknesses);
     if (weaknessesList) {
         const weaknessesHTML = Object.entries(teamWeaknesses)
             .sort((a, b) => b[1].effectiveness - a[1].effectiveness)
             .map(([type, data]) => `
                 <span class="type-badge type-${type}" title="Affects: ${data.affectedPokemon.join(', ')}">${type}</span>
             `).join('');
-        
         weaknessesList.innerHTML = weaknessesHTML || '<div class="no-data">No major weaknesses</div>';
         console.log('Updated teamWeaknesses with:', weaknessesHTML);
     } else {
@@ -1656,6 +1662,20 @@ async function updateMatchupAnalysis() {
             body: JSON.stringify({ opponent: opponentId, team: teamIds })
         });
         const data = await resp.json();
+        // Update left panel (opponent) with full type chart
+        if (data.opponent_effectiveness) {
+            displayEffectiveness(data.opponent_effectiveness);
+        }
+        // Update right panel (team) with full type chart for each member
+        if (data.team_infos && Array.isArray(data.team_infos)) {
+            userTeam.forEach((pokemon, idx) => {
+                if (data.team_infos[idx] && data.team_infos[idx].effectiveness) {
+                    pokemon.effectiveness = data.team_infos[idx].effectiveness;
+                }
+            });
+            // Recalculate team analysis panels
+            updateTeamAnalysis();
+        }
         renderOpponentMovesVsTeam(data.opponent_moves_vs_team, data.team);
         updateAllTeamSlotsWithEffectiveness(data.team_moves_vs_opponent);
     } catch (e) {
@@ -1806,22 +1826,40 @@ function renderOpponentMovesVsTeam(opponentMovesVsTeam, teamNames) {
     if (!opponentMovesVsTeam || opponentMovesVsTeam.length === 0) {
         html = '<div class="no-data">No matchup data</div>';
     } else {
+        // Only show opponent's best PvP moves (from pvpoke_moveset)
+        let bestMoveNames = [];
+        if (currentOpponent && currentOpponent.pvpoke_moveset && currentOpponent.pvpoke_moveset.length > 0) {
+            bestMoveNames = currentOpponent.pvpoke_moveset.map(m => m.replace(/_/g, ' ').toLowerCase());
+        }
+        // Filter the columns to only those moves
+        let filteredOpponentMoves = opponentMovesVsTeam.filter(row => {
+            const moveNameLower = row.move.name.toLowerCase();
+            return bestMoveNames.includes(moveNameLower);
+        });
+        // Fallback: if no best moves found, show the first 3 moves
+        if (filteredOpponentMoves.length === 0) {
+            filteredOpponentMoves = opponentMovesVsTeam.slice(0, 3);
+        }
+        console.log('[DEBUG] Opponent moves shown in matchup table:', filteredOpponentMoves.map(r => r.move.name));
+        // Table header: Opponent's moves
         html += `<table class="matchup-table"><thead><tr><th>Your Pokémon</th>`;
-        opponentMovesVsTeam.forEach(row => {
+        filteredOpponentMoves.forEach(row => {
             html += `<th><span class="move-name">${row.move.name}</span><br><span class="type-badge type-${row.move.type}">${row.move.type}</span><br><span class="move-type">(${row.move.move_class})</span></th>`;
         });
         html += `</tr></thead><tbody>`;
-        
-        // Create rows for each team member
+        // Table rows: Your team
         teamNames.forEach((teamName, teamIndex) => {
             html += `<tr><td><strong>${teamName}</strong></td>`;
-            opponentMovesVsTeam.forEach(row => {
+            filteredOpponentMoves.forEach(row => {
                 const cell = row.vs_team[teamIndex];
                 let effClass = '';
                 if (cell.effectiveness.label === 'Super Effective') effClass = 'move-eff-super';
                 else if (cell.effectiveness.label === 'Not Very Effective') effClass = 'move-eff-notvery';
+                else if (cell.effectiveness.label === 'Immune') effClass = 'move-eff-immune';
                 else effClass = 'move-eff-neutral';
-                html += `<td><span class="move-effectiveness ${effClass}">${cell.effectiveness.label}</span></td>`;
+                html += `<td><span class="move-effectiveness ${effClass}">${cell.effectiveness.label}</span>`;
+                html += ` <span class="move-multiplier">(${cell.effectiveness.multiplier}x)</span>`;
+                html += `</td>`;
             });
             html += `</tr>`;
         });
@@ -1829,10 +1867,10 @@ function renderOpponentMovesVsTeam(opponentMovesVsTeam, teamNames) {
     }
     let matchupTable = document.getElementById('opponentMatchupTable');
     if (!matchupTable) {
+        const analysisContent = document.querySelector('.analysis-content');
         matchupTable = document.createElement('div');
         matchupTable.id = 'opponentMatchupTable';
-        const info = document.getElementById('pokemonInfo');
-        info.appendChild(matchupTable);
+        analysisContent.prepend(matchupTable);
     }
     matchupTable.innerHTML = `<h3>Opponent's Moves vs Your Team</h3>` + html;
 }

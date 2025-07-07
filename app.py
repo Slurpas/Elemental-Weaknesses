@@ -160,13 +160,14 @@ def index():
 def get_move_effectiveness(move_type, defender_types):
     # Use get_type_effectiveness to get the effectiveness dict for the defender
     eff = get_type_effectiveness(defender_types)
-    multiplier = eff.get(move_type, 1.0)
+    multiplier = eff['effectiveness'].get(move_type, 1.0)
     if multiplier > 1:
         label = 'Super Effective'
     elif multiplier < 1:
         label = 'Not Very Effective'
     else:
         label = 'Neutral'
+    print(f"[DEBUG] get_move_effectiveness: move_type={move_type}, defender_types={defender_types}, multiplier={multiplier}, label={label}")
     return multiplier, label
 
 @app.route('/api/pokemon/<name>')
@@ -327,7 +328,7 @@ def search_pokemon(query):
             return jsonify({'error': 'Internal server error'}), 500
 
 def get_type_effectiveness(types):
-    """Calculate type effectiveness for given Pokemon types using PokeAPI"""
+    """Calculate type effectiveness for given Pokemon types using PvP multipliers (no immunities in Go PvP)"""
     try:
         # Check if we have cached type data
         type_key = '-'.join(sorted(types))
@@ -335,23 +336,22 @@ def get_type_effectiveness(types):
             cached_data, timestamp = type_cache[type_key]
             if datetime.now() - timestamp < cache_duration:
                 return cached_data
-        
         print(f"DEBUG: Processing types: {types}")
-        
+        # PvP multipliers
+        PVP_WEAK = 1.6
+        PVP_RESIST = 0.625
+        PVP_DOUBLE_RESIST = 0.391
         # Get type effectiveness from PokeAPI for each type
         combined_effectiveness = {}
         all_types = ['normal', 'fire', 'water', 'electric', 'grass', 'ice', 'fighting', 
                      'poison', 'ground', 'flying', 'psychic', 'bug', 'rock', 'ghost', 
                      'dragon', 'dark', 'steel', 'fairy']
-        
         # Initialize all types with 1.0 multiplier
         for attacking_type in all_types:
             combined_effectiveness[attacking_type] = 1.0
-        
         # Get effectiveness data for each defending type
         for defending_type in types:
             print(f"DEBUG: Processing defending type: {defending_type}")
-            
             # Check if type data is cached
             if defending_type in type_cache:
                 type_data = type_cache[defending_type][0]
@@ -366,7 +366,6 @@ def get_type_effectiveness(types):
                 else:
                     print(f"DEBUG: Failed to fetch data for {defending_type}")
                     continue
-            
             # Process damage relations
             if 'damage_relations' in type_data:
                 print(f"DEBUG: Damage relations for {defending_type}: {type_data['damage_relations']}")
@@ -377,91 +376,104 @@ def get_type_effectiveness(types):
                             attacking_type_name = attacking_type_info['name']
                             if attacking_type_name in combined_effectiveness:
                                 old_value = combined_effectiveness[attacking_type_name]
-                                combined_effectiveness[attacking_type_name] *= 2
-                                print(f"DEBUG: {attacking_type_name} vs {defending_type}: {old_value} -> {combined_effectiveness[attacking_type_name]}")
+                                combined_effectiveness[attacking_type_name] *= PVP_WEAK
+                                print(f"DEBUG: {attacking_type_name} vs {defending_type}: {old_value} -> {combined_effectiveness[attacking_type_name]} (WEAK)")
                     elif relation_name == 'half_damage_from':
                         for attacking_type_info in type_list:
                             attacking_type_name = attacking_type_info['name']
                             if attacking_type_name in combined_effectiveness:
                                 old_value = combined_effectiveness[attacking_type_name]
-                                combined_effectiveness[attacking_type_name] *= 0.5
-                                print(f"DEBUG: {attacking_type_name} vs {defending_type}: {old_value} -> {combined_effectiveness[attacking_type_name]}")
-                    elif relation_name == 'no_damage_from':
-                        for attacking_type_info in type_list:
-                            attacking_type_name = attacking_type_info['name']
-                            if attacking_type_name in combined_effectiveness:
-                                old_value = combined_effectiveness[attacking_type_name]
-                                combined_effectiveness[attacking_type_name] *= 0
-                                print(f"DEBUG: {attacking_type_name} vs {defending_type}: {old_value} -> {combined_effectiveness[attacking_type_name]}")
+                                combined_effectiveness[attacking_type_name] *= PVP_RESIST
+                                print(f"DEBUG: {attacking_type_name} vs {defending_type}: {old_value} -> {combined_effectiveness[attacking_type_name]} (RESIST)")
+                    # Do NOT process 'no_damage_from' as immunity in Go PvP
             else:
                 print(f"ERROR: No 'damage_relations' found for type {defending_type}. type_data: {type_data}")
                 continue
-        
+        # After processing all types, adjust for double resistance
+        for atk_type in all_types:
+            # If multiplier is exactly PVP_RESIST * PVP_RESIST, set to PVP_DOUBLE_RESIST
+            if abs(combined_effectiveness[atk_type] - (PVP_RESIST * PVP_RESIST)) < 0.01:
+                combined_effectiveness[atk_type] = PVP_DOUBLE_RESIST
         print(f"DEBUG: Final effectiveness: {combined_effectiveness}")
-        
-        # Return detailed effectiveness with multipliers (no immunities in Go PvP)
         result = {
             'effectiveness': combined_effectiveness,
             'weaknesses': [(type_name, mult) for type_name, mult in combined_effectiveness.items() if mult > 1],
-            'resistances': [(type_name, mult) for type_name, mult in combined_effectiveness.items() if mult < 1 and mult > 0],
-            'double_resistances': [(type_name, mult) for type_name, mult in combined_effectiveness.items() if mult < 0.5]
+            'resistances': [(type_name, mult) for type_name, mult in combined_effectiveness.items() if mult < 1 and mult > PVP_DOUBLE_RESIST],
+            'double_resistances': [(type_name, mult) for type_name, mult in combined_effectiveness.items() if mult <= PVP_DOUBLE_RESIST]
         }
-        
-        # Cache the result
         type_cache[type_key] = (result, datetime.now())
-        
         return result
-        
     except Exception as e:
         print(f"Error getting type effectiveness: {e}")
         import traceback
         traceback.print_exc()
-        # Fallback to simplified chart if API fails
         return get_fallback_effectiveness(types)
 
 def get_fallback_effectiveness(types):
-    """Fallback effectiveness calculation if API fails"""
-    # Complete type effectiveness chart
+    """Fallback effectiveness calculation if API fails (PvP multipliers, no immunities)"""
+    # PvP multipliers
+    PVP_WEAK = 1.6
+    PVP_NEUTRAL = 1.0
+    PVP_RESIST = 0.625
+    PVP_DOUBLE_RESIST = 0.391
+    PVP_TRIPLE_RESIST = 0.244
+    all_types = ['normal', 'fire', 'water', 'electric', 'grass', 'ice', 'fighting', 'poison', 'ground', 'flying', 'psychic', 'bug', 'rock', 'ghost', 'dragon', 'dark', 'steel', 'fairy']
+    # Type chart: attacking_type -> defending_type -> multiplier
     effectiveness_chart = {
-        'normal': {'rock': 0.5, 'ghost': 0, 'steel': 0.5},
-        'fire': {'fire': 0.5, 'water': 0.5, 'grass': 2, 'ice': 2, 'bug': 2, 'rock': 0.5, 'dragon': 0.5, 'steel': 2},
-        'water': {'fire': 2, 'water': 0.5, 'grass': 0.5, 'ground': 2, 'rock': 2, 'dragon': 0.5},
-        'electric': {'water': 2, 'electric': 0.5, 'grass': 0.5, 'ground': 0, 'flying': 2, 'dragon': 0.5},
-        'grass': {'fire': 0.5, 'water': 2, 'grass': 0.5, 'poison': 0.5, 'ground': 2, 'flying': 0.5, 'bug': 0.5, 'rock': 2, 'dragon': 0.5, 'steel': 0.5},
-        'ice': {'fire': 0.5, 'water': 0.5, 'grass': 2, 'ice': 0.5, 'ground': 2, 'flying': 2, 'dragon': 2, 'steel': 0.5},
-        'fighting': {'normal': 2, 'ice': 2, 'poison': 0.5, 'flying': 0.5, 'psychic': 0.5, 'bug': 0.5, 'rock': 2, 'ghost': 0, 'steel': 2, 'fairy': 0.5},
-        'poison': {'grass': 2, 'poison': 0.5, 'ground': 0.5, 'rock': 0.5, 'ghost': 0.5, 'steel': 0, 'fairy': 2},
-        'ground': {'fire': 2, 'electric': 2, 'grass': 0.5, 'poison': 2, 'flying': 0, 'bug': 0.5, 'rock': 2, 'steel': 2},
-        'flying': {'electric': 0.5, 'grass': 2, 'fighting': 2, 'bug': 2, 'rock': 0.5, 'steel': 0.5},
-        'psychic': {'fighting': 2, 'poison': 2, 'psychic': 0.5, 'dark': 0, 'steel': 0.5},
-        'bug': {'fire': 0.5, 'grass': 2, 'fighting': 0.5, 'poison': 0.5, 'flying': 0.5, 'psychic': 2, 'ghost': 0.5, 'dark': 2, 'steel': 0.5, 'fairy': 0.5},
-        'rock': {'fire': 2, 'ice': 2, 'fighting': 0.5, 'ground': 0.5, 'flying': 2, 'bug': 2, 'steel': 0.5},
-        'ghost': {'normal': 0, 'psychic': 2, 'ghost': 2, 'dark': 0.5},
-        'dragon': {'dragon': 2, 'steel': 0.5, 'fairy': 0},
-        'dark': {'fighting': 0.5, 'psychic': 2, 'ghost': 2, 'dark': 0.5, 'fairy': 0.5},
-        'steel': {'fire': 0.5, 'water': 0.5, 'electric': 0.5, 'ice': 2, 'rock': 2, 'steel': 0.5, 'fairy': 2},
-        'fairy': {'fighting': 2, 'poison': 0.5, 'dragon': 2, 'dark': 2, 'steel': 0.5}
+        'normal': {'rock': PVP_RESIST, 'ghost': PVP_RESIST, 'steel': PVP_RESIST},
+        'fire': {'fire': PVP_RESIST, 'water': PVP_RESIST, 'grass': PVP_WEAK, 'ice': PVP_WEAK, 'bug': PVP_WEAK, 'rock': PVP_RESIST, 'dragon': PVP_RESIST, 'steel': PVP_WEAK},
+        'water': {'fire': PVP_WEAK, 'water': PVP_RESIST, 'grass': PVP_RESIST, 'ground': PVP_WEAK, 'rock': PVP_WEAK, 'dragon': PVP_RESIST},
+        'electric': {'water': PVP_WEAK, 'electric': PVP_RESIST, 'grass': PVP_RESIST, 'ground': PVP_RESIST, 'flying': PVP_WEAK, 'dragon': PVP_RESIST},
+        'grass': {'fire': PVP_RESIST, 'water': PVP_WEAK, 'grass': PVP_RESIST, 'poison': PVP_RESIST, 'ground': PVP_WEAK, 'flying': PVP_RESIST, 'bug': PVP_RESIST, 'rock': PVP_WEAK, 'dragon': PVP_RESIST, 'steel': PVP_RESIST},
+        'ice': {'fire': PVP_RESIST, 'water': PVP_RESIST, 'grass': PVP_WEAK, 'ice': PVP_RESIST, 'ground': PVP_WEAK, 'flying': PVP_WEAK, 'dragon': PVP_WEAK, 'steel': PVP_RESIST},
+        'fighting': {'normal': PVP_WEAK, 'ice': PVP_WEAK, 'rock': PVP_WEAK, 'dark': PVP_WEAK, 'steel': PVP_WEAK, 'poison': PVP_RESIST, 'flying': PVP_RESIST, 'psychic': PVP_RESIST, 'bug': PVP_RESIST, 'fairy': PVP_RESIST},
+        'poison': {'grass': PVP_WEAK, 'fairy': PVP_WEAK, 'poison': PVP_RESIST, 'ground': PVP_RESIST, 'rock': PVP_RESIST, 'ghost': PVP_RESIST, 'steel': PVP_RESIST},
+        'ground': {'fire': PVP_WEAK, 'electric': PVP_WEAK, 'poison': PVP_WEAK, 'rock': PVP_WEAK, 'steel': PVP_WEAK, 'grass': PVP_RESIST, 'ice': PVP_RESIST, 'bug': PVP_RESIST},
+        'flying': {'electric': PVP_RESIST, 'grass': PVP_WEAK, 'fighting': PVP_WEAK, 'bug': PVP_WEAK, 'rock': PVP_RESIST, 'steel': PVP_RESIST},
+        'psychic': {'fighting': PVP_WEAK, 'poison': PVP_WEAK, 'psychic': PVP_RESIST, 'steel': PVP_RESIST, 'dark': PVP_RESIST},
+        'bug': {'fire': PVP_RESIST, 'grass': PVP_WEAK, 'fighting': PVP_RESIST, 'poison': PVP_RESIST, 'flying': PVP_RESIST, 'psychic': PVP_WEAK, 'ghost': PVP_RESIST, 'dark': PVP_WEAK, 'steel': PVP_RESIST, 'fairy': PVP_RESIST},
+        'rock': {'fire': PVP_WEAK, 'ice': PVP_WEAK, 'fighting': PVP_RESIST, 'ground': PVP_RESIST, 'flying': PVP_WEAK, 'bug': PVP_WEAK, 'steel': PVP_RESIST},
+        'ghost': {'normal': PVP_RESIST, 'psychic': PVP_WEAK, 'ghost': PVP_WEAK, 'dark': PVP_RESIST},
+        'dragon': {'dragon': PVP_WEAK, 'steel': PVP_RESIST, 'fairy': PVP_RESIST},
+        'dark': {'fighting': PVP_RESIST, 'psychic': PVP_WEAK, 'ghost': PVP_WEAK, 'dark': PVP_RESIST, 'fairy': PVP_RESIST},
+        'steel': {'fire': PVP_RESIST, 'water': PVP_RESIST, 'electric': PVP_RESIST, 'ice': PVP_WEAK, 'rock': PVP_WEAK, 'fairy': PVP_WEAK, 'steel': PVP_RESIST},
+        'fairy': {'fire': PVP_RESIST, 'fighting': PVP_WEAK, 'poison': PVP_RESIST, 'dragon': PVP_WEAK, 'dark': PVP_WEAK, 'steel': PVP_RESIST},
     }
-    
-    # Calculate combined effectiveness
-    combined_effectiveness = {}
-    all_types = ['normal', 'fire', 'water', 'electric', 'grass', 'ice', 'fighting', 
-                 'poison', 'ground', 'flying', 'psychic', 'bug', 'rock', 'ghost', 
-                 'dragon', 'dark', 'steel', 'fairy']
-    
-    for attacking_type in all_types:
-        multiplier = 1.0
-        for defending_type in types:
-            if attacking_type in effectiveness_chart and defending_type in effectiveness_chart[attacking_type]:
-                multiplier *= effectiveness_chart[attacking_type][defending_type]
-        combined_effectiveness[attacking_type] = multiplier
-    
-    # Return detailed effectiveness with multipliers (no immunities in Go PvP)
+    # Start with 1.0 for all types
+    combined_effectiveness = {t: 1.0 for t in all_types}
+    for defending_type in types:
+        for attacking_type in all_types:
+            mult = effectiveness_chart.get(attacking_type, {}).get(defending_type, 1.0)
+            combined_effectiveness[attacking_type] *= mult
+    # Categorize by closest PvP multiplier
+    categories = {
+        'weaknesses': [],
+        'triple_resistances': [],
+        'double_resistances': [],
+        'resistances': [],
+        'neutral': []
+    }
+    def closest_category(mult):
+        # Order: triple, double, single, neutral, weakness
+        pvp_vals = [
+            (PVP_TRIPLE_RESIST, 'triple_resistances'),
+            (PVP_DOUBLE_RESIST, 'double_resistances'),
+            (PVP_RESIST, 'resistances'),
+            (PVP_NEUTRAL, 'neutral'),
+            (PVP_WEAK, 'weaknesses')
+        ]
+        closest = min(pvp_vals, key=lambda x: abs(mult - x[0]))
+        return closest[1], closest[0]
+    for t, mult in combined_effectiveness.items():
+        cat, val = closest_category(mult)
+        categories[cat].append((t, mult))
+    print(f"[DEBUG] get_fallback_effectiveness: types={types}\n  combined_effectiveness={combined_effectiveness}\n  weaknesses={categories['weaknesses']}\n  resistances={categories['resistances']}\n  double_resistances={categories['double_resistances']}\n  triple_resistances={categories['triple_resistances']}")
     return {
         'effectiveness': combined_effectiveness,
-        'weaknesses': [(type_name, mult) for type_name, mult in combined_effectiveness.items() if mult > 1],
-        'resistances': [(type_name, mult) for type_name, mult in combined_effectiveness.items() if mult < 1 and mult > 0],
-        'double_resistances': [(type_name, mult) for type_name, mult in combined_effectiveness.items() if mult < 0.5]
+        'weaknesses': categories['weaknesses'],
+        'resistances': categories['resistances'],
+        'double_resistances': categories['double_resistances'],
+        'triple_resistances': categories['triple_resistances']
     }
 
 @app.route('/api/matchup', methods=['POST'])
@@ -491,20 +503,31 @@ def matchup():
         
         # Get opponent moves
         opponent_moves = poke_data.get_pokemon_moves(opponent_data['speciesId'])
-        print(f"DEBUG: Opponent moves for {opponent_data['speciesId']}: {opponent_moves}")
+        pvpoke_moveset = pvp_rankings_by_species.get(opponent_data['speciesId'].lower(), {}).get('moveset', [])
+        # Normalize PvPoke moveset for matching (upper, lower, underscores, spaces)
+        def normalize_move_name(name):
+            return name.lower().replace('_', '').replace(' ', '')
+        pvpoke_moveset_norm = set([normalize_move_name(m) for m in pvpoke_moveset])
         opponent_pvp_moves = []
         for move in opponent_moves.get('fast_moves', []) + opponent_moves.get('charged_moves', []):
-            opponent_pvp_moves.append({
-                'name': move['name'],
-                'type': move['type'],
-                'move_class': 'fast' if move in opponent_moves.get('fast_moves', []) else 'charged',
-                'power': move.get('power'),
-                'energy': move.get('energy'),
-                'energyGain': move.get('energyGain')
-            })
+            # Try to match by id or name
+            move_id_norm = normalize_move_name(move.get('id', move.get('name', '')))
+            move_name_norm = normalize_move_name(move.get('name', ''))
+            if move_id_norm in pvpoke_moveset_norm or move_name_norm in pvpoke_moveset_norm:
+                opponent_pvp_moves.append({
+                    'name': move['name'],
+                    'type': move['type'],
+                    'move_class': 'fast' if move in opponent_moves.get('fast_moves', []) else 'charged',
+                    'power': move.get('power'),
+                    'energy': move.get('energy'),
+                    'energyGain': move.get('energyGain')
+                })
         
         print(f"DEBUG: Opponent moves: {len(opponent_moves.get('fast_moves', []))} fast, {len(opponent_moves.get('charged_moves', []))} charged")
 
+        # Get opponent effectiveness (full type chart)
+        opponent_effectiveness = get_fallback_effectiveness(opponent_types)
+        
         # Get team info directly from poke_data
         team_infos = []
         for name in team:
@@ -526,16 +549,20 @@ def matchup():
                         'energy': move.get('energy'),
                         'energyGain': move.get('energyGain')
                     })
+                # Add full effectiveness for each team member
+                team_effectiveness = get_fallback_effectiveness(team_data.get('types', []))
                 team_infos.append({
                     'name': team_data['speciesName'],
                     'types': team_data.get('types', []),
-                    'pvp_moves': pvp_moves
+                    'pvp_moves': pvp_moves,
+                    'effectiveness': team_effectiveness
                 })
             else:
                 team_infos.append({
                     'name': name,
                     'types': [],
-                    'pvp_moves': []
+                    'pvp_moves': [],
+                    'effectiveness': get_fallback_effectiveness([])
                 })
 
         # For each opponent move, calculate effectiveness vs each team member
@@ -586,7 +613,10 @@ def matchup():
 
         return jsonify({
             'opponent': opponent_name,
+            'opponent_types': opponent_types,
+            'opponent_effectiveness': opponent_effectiveness,
             'team': team,
+            'team_infos': team_infos,
             'opponent_moves_vs_team': opponent_moves_vs_team,
             'team_moves_vs_opponent': team_moves_vs_opponent
         })
