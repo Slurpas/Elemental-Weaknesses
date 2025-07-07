@@ -19,8 +19,8 @@ body {
 
 .main-content {
     display: grid;
-    grid-template-columns: 1fr 1.5fr;
-    gap: 30px;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 20px;
     margin-top: 30px;
     position: relative;
 }
@@ -29,6 +29,22 @@ body {
     min-width: 0;
     position: relative;
     max-width: 100%;
+    background: white;
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    height: fit-content;
+}
+
+.middle-panel {
+    min-width: 0;
+    position: relative;
+    max-width: 100%;
+    background: white;
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    height: fit-content;
 }
 
 .right-panel {
@@ -934,7 +950,10 @@ header p {
 }
 
 .coverage-section h4,
-.matchup-section h4 {
+.team-weaknesses-section h4,
+.team-strengths-section h4,
+.missing-coverage-section h4,
+.battle-simulations-section h4 {
     font-size: 1rem;
     font-weight: 600;
     margin-bottom: 10px;
@@ -968,6 +987,67 @@ header p {
     align-items: center;
     justify-content: center;
     font-size: 0.7rem;
+}
+
+/* Team Analysis Sections */
+.team-weaknesses-list,
+.team-strengths-list,
+.missing-coverage-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 15px;
+}
+
+.team-weaknesses-list .type-badge {
+    background: #dc3545;
+    color: white;
+    font-size: 0.8rem;
+    padding: 4px 8px;
+    border-radius: 6px;
+}
+
+.team-strengths-list .type-badge {
+    background: #28a745;
+    color: white;
+    font-size: 0.8rem;
+    padding: 4px 8px;
+    border-radius: 6px;
+}
+
+.missing-coverage-list .type-badge {
+    background: #6c757d;
+    color: white;
+    font-size: 0.8rem;
+    padding: 4px 8px;
+    border-radius: 6px;
+}
+
+.team-weaknesses-section,
+.team-strengths-section,
+.missing-coverage-section,
+.battle-simulations-section {
+    margin-bottom: 20px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border-left: 4px solid #667eea;
+}
+
+.team-weaknesses-section {
+    border-left-color: #dc3545;
+}
+
+.team-strengths-section {
+    border-left-color: #28a745;
+}
+
+.missing-coverage-section {
+    border-left-color: #6c757d;
+}
+
+.battle-simulations-section {
+    border-left-color: #ffc107;
 }
 
 .battle-simulations-list {
@@ -1122,8 +1202,12 @@ header p {
         gap: 20px;
     }
     
-    .right-panel {
+    .middle-panel {
         order: -1;
+    }
+    
+    .right-panel {
+        order: -2;
     }
     
     .search-container {
@@ -1461,6 +1545,45 @@ header p {
 .moves-list-pvp .move-item {
     border-left: 4px solid #4CAF50;
     background: #eaffea;
+    padding: 12px;
+    margin-bottom: 8px;
+    border-radius: 8px;
+}
+
+.moves-list-pvp .move-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+    flex-wrap: wrap;
+}
+
+.moves-list-pvp .move-details {
+    font-size: 0.9rem;
+    color: #666;
+    margin-top: 4px;
+}
+
+.move-edit-icon {
+    font-size: 0.8rem;
+    color: #666;
+    margin-left: auto;
+    cursor: pointer;
+    opacity: 0.7;
+    transition: opacity 0.2s;
+}
+
+.move-item:hover .move-edit-icon {
+    opacity: 1;
+}
+
+.move-item {
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.move-item:hover {
+    background-color: #f5f5f5;
 }
 
 .move-effectiveness.move-eff-super {
@@ -1477,6 +1600,81 @@ header p {
 }
 .move-effectiveness.move-eff-neutral {
     color: #666;
+}
+
+/* Move Ranking Styles */
+.move-item.move-best {
+    background: rgba(255, 215, 0, 0.15);
+    border-left: 4px solid #FFD700;
+}
+
+.move-item.move-excellent {
+    background: rgba(192, 192, 192, 0.15);
+    border-left: 4px solid #C0C0C0;
+}
+
+.move-item.move-good {
+    background: rgba(205, 127, 50, 0.15);
+    border-left: 4px solid #CD7F32;
+}
+
+.move-item.move-mediocre {
+    background: rgba(255, 165, 0, 0.15);
+    border-left: 4px solid #FFA500;
+}
+
+.move-item.move-poor {
+    background: rgba(255, 107, 107, 0.15);
+    border-left: 4px solid #FF4500;
+}
+
+.ranking-badge {
+    display: inline-block;
+    margin-right: 8px;
+    font-size: 1.2em;
+    vertical-align: middle;
+}
+
+.ranking-badge.ranking-gold {
+    color: #FFD700;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.ranking-badge.ranking-silver {
+    color: #C0C0C0;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.ranking-badge.ranking-bronze {
+    color: #CD7F32;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.ranking-badge.ranking-mediocre {
+    color: #FFA500;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.ranking-badge.ranking-poor {
+    color: #FF4500;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.ranking-percentage {
+    display: inline-block;
+    margin-left: 4px;
+    font-size: 0.8em;
+    font-weight: bold;
+    color: #666;
+    background: rgba(255, 255, 255, 0.8);
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+/* Move Ranking Background Colors */
+.move-item.move-significantly-better {
+    background: rgba(76, 175, 80, 0.15) !important;
+    border-left: 4px solid #4CAF50 !important;
 }
 
 .matchup-table {

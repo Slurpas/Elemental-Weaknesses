@@ -229,8 +229,13 @@ class BattlePokemon:
     
     def _initialize_moves(self):
         """Initialize move objects from move IDs"""
+        print(f"[DEBUG] Initializing moves for {self.data['speciesId']}: {self.moves}")
+        
         if "fast" in self.moves:
             self.fast_move = self.poke_data.get_move_details(self.moves["fast"])
+            print(f"[DEBUG] Fast move: {self.moves['fast']} -> {self.fast_move['name'] if self.fast_move else 'NOT FOUND'}")
+            if self.fast_move:
+                print(f"[DEBUG] Fast move details: power={self.fast_move.get('power', 'N/A')}, energy={self.fast_move.get('energy', 'N/A')}, energyGain={self.fast_move.get('energyGain', 'N/A')}")
         
         for i in range(1, 3):
             key = f"charged{i}"
@@ -238,6 +243,13 @@ class BattlePokemon:
                 move_data = self.poke_data.get_move_details(self.moves[key])
                 if move_data:
                     self.charged_moves.append(move_data)
+                    print(f"[DEBUG] Charged move {i}: {self.moves[key]} -> {move_data['name']} (power: {move_data.get('power', 'N/A')}, energy: {move_data.get('energy', 'N/A')})")
+                else:
+                    print(f"[DEBUG] Charged move {i}: {self.moves[key]} -> NOT FOUND")
+                    print(f"[DEBUG] Available move IDs: {list(self.poke_data.moves_by_id.keys())[:10]}...")  # Show first 10 for debugging
+        
+        print(f"[DEBUG] Final charged moves for {self.data['speciesId']}: {[m['name'] for m in self.charged_moves]}")
+        print(f"[DEBUG] Final charged moves details for {self.data['speciesId']}: {[(m['name'], m.get('power', 'N/A'), m.get('energy', 'N/A')) for m in self.charged_moves]}")
     
     def get_effective_atk(self) -> float:
         """Get effective attack stat with buffs and shadow multiplier"""
@@ -316,6 +328,10 @@ class BattleSimulator:
         Returns:
             Detailed battle result with winner, timeline, stats, etc.
         """
+        print(f"[BATTLE SIM DEBUG] Starting simulation with moves:")
+        print(f"[BATTLE SIM DEBUG] P1 moves: {p1_moves}")
+        print(f"[BATTLE SIM DEBUG] P2 moves: {p2_moves}")
+        
         # Get shield AI strategies from settings
         p1_shield_strategy = settings.get('p1_shield_ai', 'smart_30') if settings else 'smart_30'
         p2_shield_strategy = settings.get('p2_shield_ai', 'smart_30') if settings else 'smart_30'
@@ -340,6 +356,7 @@ class BattleSimulator:
         # Main battle loop
         while not p1.is_fainted() and not p2.is_fainted():
             turn += 1
+            print(f"[BATTLE SIM DEBUG] Turn {turn} - P1 HP: {p1.hp}, P2 HP: {p2.hp}")
             
             # Process fast moves
             p1_fast_result = self._process_fast_move(p1, p2, turn)
@@ -357,8 +374,10 @@ class BattleSimulator:
             
             if p1_charged_result:
                 timeline.append(p1_charged_result)
+                print(f"[BATTLE SIM DEBUG] P1 used charged move: {p1_charged_result.get('move', 'Unknown')}")
             if p2_charged_result:
                 timeline.append(p2_charged_result)
+                print(f"[BATTLE SIM DEBUG] P2 used charged move: {p2_charged_result.get('move', 'Unknown')}")
             
             # Check for fainting after charged moves
             if p1.is_fainted() or p2.is_fainted():
@@ -366,10 +385,9 @@ class BattleSimulator:
         
         # Determine winner and calculate battle rating
         winner, battle_rating = self._determine_winner(p1, p2)
-        
+        print(f"[DEBUG] Battle finished. Winner: {winner}, P1 HP: {p1.hp}/{p1.max_hp}, P2 HP: {p2.hp}/{p2.max_hp}, Battle rating: {battle_rating}")
         # Debug: Show final shield counts
         print(f"[DEBUG] Final shield counts - P1 ({p1.data['speciesId']} id={id(p1)}): {p1.shields}, P2 ({p2.data['speciesId']} id={id(p2)}): {p2.shields}")
-        
         return {
             "winner": winner,
             "p1_final_hp": p1.hp,
@@ -430,8 +448,68 @@ class BattleSimulator:
         if not available_moves:
             return None
         
-        # Simple AI: use the most expensive move available
-        move = max(available_moves, key=lambda m: m["energy"])
+        print(f"[DEBUG] {attacker.data['speciesId']} has {len(available_moves)} available charged moves: {[m['name'] for m in available_moves]}")
+        print(f"[DEBUG] {attacker.data['speciesId']} available moves details: {[(m['name'], m.get('power', 'N/A'), m.get('energy', 'N/A')) for m in available_moves]}")
+        
+        # Get ALL charged moves (not just available ones) to compare DPE
+        all_charged_moves = attacker.charged_moves
+        print(f"[DEBUG] {attacker.data['speciesId']} all charged moves: {[(m['name'], m.get('power', 'N/A'), m.get('energy', 'N/A')) for m in all_charged_moves]}")
+        
+        # Calculate DPE for all moves (using effective power after type effectiveness)
+        move_dpe = {}
+        for move in all_charged_moves:
+            # Calculate effective power considering type effectiveness and STAB
+            move_type = move["type"]
+            defender_types = defender.data.get("types", [])
+            effectiveness = TypeChart.get_effectiveness(move_type, defender_types)
+            stab = DamageMultiplier.STAB if move_type in attacker.data.get("types", []) else 1.0
+            
+            effective_power = move["power"] * effectiveness * stab
+            effective_dpe = effective_power / move["energy"] if move["energy"] > 0 else 0
+            move_dpe[move["name"]] = effective_dpe
+            print(f"[DEBUG] {attacker.data['speciesId']} move {move['name']}: power={move['power']}, energy={move['energy']}, effectiveness={effectiveness}, stab={stab}, effective_power={effective_power:.1f}, dpe={effective_dpe:.2f}")
+        
+        # Find the move with the highest DPE
+        best_move_name = max(move_dpe.keys(), key=lambda k: move_dpe[k])
+        best_dpe = move_dpe[best_move_name]
+        best_move = next(m for m in all_charged_moves if m["name"] == best_move_name)
+        current_energy = attacker.energy
+
+        # Print DPE for all available charged moves at this moment
+        print(f"[DEBUG] {attacker.data['speciesId']} available charged moves and DPE:")
+        for move in available_moves:
+            print(f"    {move['name']}: DPE={move_dpe[move['name']]:.2f} (energy: {move['energy']}, effective power: {move['power']})")
+        print(f"[DEBUG] {attacker.data['speciesId']} best move by DPE: {best_move_name} (dpe: {best_dpe:.2f}, energy: {best_move['energy']})")
+        print(f"[DEBUG] {attacker.data['speciesId']} current energy: {current_energy}")
+
+        # If the best move is available, use it
+        if current_energy >= best_move["energy"]:
+            move = best_move
+            print(f"[DEBUG] {attacker.data['speciesId']} using best move: {move['name']} (energy: {move['energy']}, dpe: {move_dpe[move['name']]:.2f})")
+        else:
+            # Check if we should wait for the best move
+            should_wait = True
+            # Don't wait if we're in danger (low HP)
+            if defender.hp < defender.max_hp * 0.3:
+                should_wait = False
+                print(f"[DEBUG] {attacker.data['speciesId']} not waiting - opponent is low HP")
+            if attacker.hp < attacker.max_hp * 0.3:
+                should_wait = False
+                print(f"[DEBUG] {attacker.data['speciesId']} not waiting - we're low HP")
+            if best_move["energy"] > current_energy * 1.5:
+                should_wait = False
+                print(f"[DEBUG] {attacker.data['speciesId']} not waiting - best move too expensive")
+            if best_move["energy"] - current_energy <= 3:
+                should_wait = False
+                print(f"[DEBUG] {attacker.data['speciesId']} not waiting - close to best move")
+            if should_wait:
+                print(f"[DEBUG] {attacker.data['speciesId']} waiting for better move - skipping charged move")
+                return None  # Skip this turn, wait for better move
+            else:
+                # Pick the available move with the highest DPE
+                best_available = max(available_moves, key=lambda m: move_dpe[m["name"]])
+                move = best_available
+                print(f"[DEBUG] {attacker.data['speciesId']} using best available move: {move['name']} (energy: {move['energy']}, dpe: {move_dpe[move['name']]:.2f})")
         
         # Calculate damage
         damage = self._calculate_damage(attacker, defender, move)
@@ -469,6 +547,7 @@ class BattleSimulator:
         
         # Use energy
         attacker.use_energy(move["energy"])
+        print(f"[DEBUG] {attacker.data['speciesId']} current energy: {attacker.energy}")
         
         # Apply buffs if any
         buff_applied = False

@@ -243,6 +243,11 @@ def get_pokemon(name):
         # Local sprite path
         sprite_url = f"/static/sprites/{p.get('speciesId')}.png"
 
+        # Get PvPoke rankings data for this Pokémon
+        species_id = p.get('speciesId', '').lower()
+        pvpoke_data = pvp_rankings_by_species.get(species_id, {})
+        print(f"[DEBUG] Looking up PvPoke data for {species_id}: {pvpoke_data.get('moveset', 'Not found')}")
+        
         # Format the response
         formatted_data = {
             'id': p.get('dex'),
@@ -253,6 +258,9 @@ def get_pokemon(name):
             'effectiveness': effectiveness,
             'moves': moves,
             'pvp_moves': pvp_moves,
+            'pvpoke_moveset': pvpoke_data.get('moveset', []),  # Best moveset from PvPoke
+            'pvpoke_rating': pvpoke_data.get('rating', 0),     # PvPoke rating
+            'pvpoke_score': pvpoke_data.get('score', 0),       # PvPoke score
             'sprite': sprite_url
         }
 
@@ -633,10 +641,19 @@ def api_battle():
         p1_available_moves = poke_data.get_pokemon_moves(p1_id)
         p2_available_moves = poke_data.get_pokemon_moves(p2_id)
         
+        print(f"[DEBUG] P1 available moves: {p1_available_moves}")
+        print(f"[DEBUG] P2 available moves: {p2_available_moves}")
+        print(f"[DEBUG] P1 moves received: {p1_moves}")
+        print(f"[DEBUG] P2 moves received: {p2_moves}")
+        
         # Check if selected moves are valid
         if not _validate_moveset(p1_moves, p1_available_moves):
+            print(f"[DEBUG] P1 moveset validation failed: {p1_moves}")
+            print(f"[DEBUG] P1 available move IDs: {[m['id'] for m in p1_available_moves.get('fast_moves', []) + p1_available_moves.get('charged_moves', [])]}")
             return jsonify({'error': f'Invalid moveset for {p1_id}'}), 400
         if not _validate_moveset(p2_moves, p2_available_moves):
+            print(f"[DEBUG] P2 moveset validation failed: {p2_moves}")
+            print(f"[DEBUG] P2 available move IDs: {[m['id'] for m in p2_available_moves.get('fast_moves', []) + p2_available_moves.get('charged_moves', [])]}")
             return jsonify({'error': f'Invalid moveset for {p2_id}'}), 400
         
         # Update settings with shield AI strategies
@@ -647,6 +664,8 @@ def api_battle():
         # Run battle simulation
         print(f"[DEBUG] Running battle simulation for CP cap: {cp_cap}")
         print(f"[DEBUG] P1 shield AI: {p1_shield_ai}, P2 shield AI: {p2_shield_ai}")
+        print(f"[DEBUG] P1 moves received: {p1_moves}")
+        print(f"[DEBUG] P2 moves received: {p2_moves}")
         result = battle_simulator.simulate(
             p1_data=p1,
             p2_data=p2,
@@ -710,15 +729,25 @@ def get_pokemon_moves(name):
         # Get all available moves
         moves_data = poke_data.get_pokemon_moves(p['speciesId'])
         
-        # Get best moveset from PvP CSV (if available)
-        best_moveset = get_pvp_moves_for_pokemon(p['speciesName'])
+        # Get best moveset from PvPoke rankings
+        pvpoke_data = pvp_rankings_by_species.get(p['speciesId'].lower(), {})
+        best_moveset = pvpoke_data.get('moveset', [])
         
-        # If no best moveset found, use first available moves
-        if not best_moveset:
-            best_moveset = {
-                'fast': moves_data['fast_moves'][0]['id'] if moves_data['fast_moves'] else None,
-                'charged1': moves_data['charged_moves'][0]['id'] if moves_data['charged_moves'] else None,
-                'charged2': moves_data['charged_moves'][1]['id'] if len(moves_data['charged_moves']) > 1 else None
+        # Convert PvPoke moveset to the expected format
+        formatted_best_moveset = {}
+        if best_moveset and len(best_moveset) >= 3:
+            # PvPoke format: ["FAST_MOVE", "CHARGED_MOVE1", "CHARGED_MOVE2"]
+            formatted_best_moveset = {
+                'fast': best_moveset[0].lower().replace('_', ' '),
+                'charged1': best_moveset[1].lower().replace('_', ' '),
+                'charged2': best_moveset[2].lower().replace('_', ' ')
+            }
+        else:
+            # Fallback to first available moves
+            formatted_best_moveset = {
+                'fast': moves_data['fast_moves'][0]['name'] if moves_data['fast_moves'] else None,
+                'charged1': moves_data['charged_moves'][0]['name'] if moves_data['charged_moves'] else None,
+                'charged2': moves_data['charged_moves'][1]['name'] if len(moves_data['charged_moves']) > 1 else None
             }
         
         # Calculate DPE for charged moves
@@ -735,7 +764,7 @@ def get_pokemon_moves(name):
             },
             'fast_moves': moves_data['fast_moves'],
             'charged_moves': moves_data['charged_moves'],
-            'best_moveset': best_moveset
+            'best_moveset': formatted_best_moveset
         })
         
     except Exception as e:
@@ -753,6 +782,91 @@ def get_shield_strategies():
         'strategies': ShieldAI.STRATEGIES,
         'default': 'smart_30'
     })
+
+@app.route('/api/pokemon/<name>/update-moves', methods=['POST'])
+def update_pokemon_moves(name):
+    """Update moves for a Pokémon and return updated data"""
+    try:
+        # Security: Validate and sanitize input
+        if not validate_pokemon_name(name):
+            return jsonify({'error': 'Invalid Pokemon name'}), 400
+        
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        new_moves = data.get('moves', {})
+        pokemon_type = data.get('type', 'team')  # 'team' or 'opponent'
+        
+        sanitized_name = sanitize_pokemon_name(name)
+        
+        # Get Pokémon data
+        p = poke_data.get_by_species_id(sanitized_name)
+        if not p:
+            p = poke_data.get_by_name(sanitized_name)
+        if not p:
+            return jsonify({'error': 'Pokemon not found'}), 404
+        
+        # Get all available moves
+        moves_data = poke_data.get_pokemon_moves(p['speciesId'])
+        
+        # Validate the new moves
+        if not _validate_moveset(new_moves, moves_data):
+            return jsonify({'error': 'Invalid moveset'}), 400
+        
+        # Get types
+        types = [t for t in p.get('types', []) if t and t != 'none']
+        
+        # Get type effectiveness
+        effectiveness = get_fallback_effectiveness(types)
+        
+        # Get PvP moves with the new moveset
+        pvp_moves = []
+        for move in moves_data.get('fast_moves', []) + moves_data.get('charged_moves', []):
+            pvp_moves.append({
+                'name': move['name'],
+                'type': move['type'],
+                'move_class': move.get('move_class', 'fast' if move in moves_data.get('fast_moves', []) else 'charged'),
+                'dpe': None,
+                'power': move.get('power', 0),
+                'energy': move.get('energy', 0)
+            })
+        
+        # Calculate effectiveness for each move
+        for move in pvp_moves:
+            if move['type']:
+                mult, label = get_move_effectiveness(move['type'], types)
+                move['effectiveness'] = {'multiplier': mult, 'label': label}
+            else:
+                move['effectiveness'] = {'multiplier': 1.0, 'label': 'Neutral'}
+        
+        # Get PvPoke rankings data
+        pvpoke_data = pvp_rankings_by_species.get(p.get('speciesId', '').lower(), {})
+        
+        # Format the response
+        formatted_data = {
+            'id': p.get('dex'),
+            'name': p.get('speciesName'),
+            'speciesId': p.get('speciesId'),
+            'types': types,
+            'stats': p.get('baseStats', {}),
+            'effectiveness': effectiveness,
+            'moves': [],  # Basic moves list
+            'pvp_moves': pvp_moves,
+            'pvpoke_moveset': pvpoke_data.get('moveset', []),
+            'pvpoke_rating': pvpoke_data.get('rating', 0),
+            'pvpoke_score': pvpoke_data.get('score', 0),
+            'sprite': f"/static/sprites/{p.get('speciesId')}.png",
+            'custom_moveset': new_moves  # Store the custom moveset
+        }
+        
+        return jsonify(formatted_data)
+        
+    except Exception as e:
+        if app.config['DEBUG']:
+            return jsonify({'error': f'Failed to update moves: {str(e)}'}), 500
+        else:
+            return jsonify({'error': 'Failed to update moves'}), 500
 
 @app.route('/api/league/<cp_cap>', methods=['POST'])
 def change_league(cp_cap):

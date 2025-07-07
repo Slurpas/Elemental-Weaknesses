@@ -152,6 +152,25 @@ async function getPokemonData(name) {
 }
 
 function displayPokemonInfo(pokemon) {
+    // --- PATCH: Set default moves to PvPoke best moveset for opponent if available ---
+    if (pokemon.pvpoke_moveset && pokemon.pvpoke_moveset.length > 0 && pokemon.pvp_moves && pokemon.pvp_moves.length > 0) {
+        const bestFastMove = pokemon.pvp_moves.find(m => m.move_class === 'fast' && pokemon.pvpoke_moveset.includes(m.name.toUpperCase().replace(/ /g, '_')));
+        const bestChargedMoves = pokemon.pvp_moves.filter(m => m.move_class === 'charged' && pokemon.pvpoke_moveset.includes(m.name.toUpperCase().replace(/ /g, '_')));
+        let newPvpMoves = [];
+        if (bestFastMove) newPvpMoves.push(bestFastMove);
+        if (bestChargedMoves.length > 0) newPvpMoves = newPvpMoves.concat(bestChargedMoves);
+        if (!bestFastMove) {
+            const fallbackFast = pokemon.pvp_moves.find(m => m.move_class === 'fast');
+            if (fallbackFast) newPvpMoves.unshift(fallbackFast);
+        }
+        while (newPvpMoves.filter(m => m.move_class === 'charged').length < 2) {
+            const fallbackCharged = pokemon.pvp_moves.find(m => m.move_class === 'charged' && !newPvpMoves.includes(m));
+            if (fallbackCharged) newPvpMoves.push(fallbackCharged);
+            else break;
+        }
+        pokemon.pvp_moves = newPvpMoves;
+    }
+    // --- END PATCH ---
     currentOpponent = pokemon;
     console.log('Setting sprite for:', pokemon.name, 'URL:', pokemon.sprite);
     const spriteElement = document.getElementById('pokemonSprite');
@@ -170,7 +189,9 @@ function displayPokemonInfo(pokemon) {
     if (userTeam.length > 0) {
         updateTeamAnalysis();
     }
-    onSelectionChange();
+    onSelectionChange().catch(error => {
+        console.error('Error in onSelectionChange:', error);
+    });
 }
 
 function displayEffectiveness(effectiveness) {
@@ -232,83 +253,78 @@ function displayMoves(pvpMoves, pokemonTypes = [], isOpponent = false) {
     const movesList = document.getElementById('movesList');
     let html = '';
     if (pvpMoves && pvpMoves.length > 0) {
-        html += `<div class="moves-pvp-header">Top PvP Moves</div>`;
-        html += `<div class="moves-list-pvp">`;
-        html += pvpMoves.map(move => {
-            // For opponent moves, show charge move details instead of effectiveness
-            if (isOpponent) {
-                let chargeDetails = '';
-                if (move.move_class === 'charged' && move.power && move.energy) {
-                    // Calculate turns to charge (assuming 1 energy per turn from fast move)
-                    const turnsToCharge = Math.ceil(move.energy);
-                    const damagePerTurn = (move.power / turnsToCharge).toFixed(1);
-                    chargeDetails = `<span class="move-charge-details">${turnsToCharge}t charge, ${move.power} damage (${damagePerTurn}/turn)</span>`;
-                } else if (move.move_class === 'fast' && move.power && move.energyGain) {
-                    chargeDetails = `<span class="move-charge-details">${move.power} damage, +${move.energyGain} energy</span>`;
-                }
+        // For opponent, show best moves from PvPoke rankings with better formatting
+        // For team Pokémon, this function is not used (handled in updateTeamSlot)
+        if (isOpponent) {
+            // Get the best moveset from PvPoke rankings if available
+            let bestMoves = [];
+            
+            if (currentOpponent && currentOpponent.pvpoke_moveset && currentOpponent.pvpoke_moveset.length > 0) {
+                // Use PvPoke's recommended moveset
+                const movesetNames = currentOpponent.pvpoke_moveset;
+                console.log(`[DEBUG] Opponent PvPoke moveset:`, movesetNames);
                 
-                return `
-                <div class="move-item">
-                    <div class="move-info">
-                        <span class="move-name">${move.name}</span>
-                        <span class="type-badge type-${move.type}">${move.type}</span>
-                        <span class="move-type">(${move.move_class === 'fast' ? 'Fast Move' : 'Charged Move'})</span>
-                        ${chargeDetails}
-                    </div>
-                </div>
-                `;
+                bestMoves = pvpMoves.filter(move => {
+                    const moveNameUpper = move.name.toUpperCase().replace(/ /g, '_');
+                    const isInMoveset = movesetNames.includes(moveNameUpper);
+                    console.log(`[DEBUG] Checking opponent move ${move.name} (${moveNameUpper}) against moveset: ${isInMoveset}`);
+                    return isInMoveset;
+                });
+                
+                console.log(`[DEBUG] Found ${bestMoves.length} opponent moves from PvPoke moveset:`, bestMoves.map(m => m.name));
+                
+                // If we couldn't find all moves, fall back to the original logic
+                if (bestMoves.length < 3) {
+                    console.log(`[DEBUG] Not enough opponent moves found (${bestMoves.length}), falling back to original logic`);
+                    const fastMoves = pvpMoves.filter(m => m.move_class === 'fast').slice(0, 1);
+                    const chargedMoves = pvpMoves.filter(m => m.move_class === 'charged').slice(0, 2);
+                    bestMoves = [...fastMoves, ...chargedMoves];
+                }
             } else {
-                // For team Pokémon, show effectiveness and DPE
-                let effClass = '';
-                if (move.effectiveness) {
-                    if (move.effectiveness.label === 'Super Effective') effClass = 'move-eff-super';
-                    else if (move.effectiveness.label === 'Not Very Effective') effClass = 'move-eff-notvery';
-                    else effClass = 'move-eff-neutral';
-                }
+                // Fallback to original logic if no PvPoke moveset
+                const fastMoves = pvpMoves.filter(m => m.move_class === 'fast').slice(0, 1);
+                const chargedMoves = pvpMoves.filter(m => m.move_class === 'charged').slice(0, 2);
+                bestMoves = [...fastMoves, ...chargedMoves];
+            }
+            
+            html += `<div class="moves-pvp-header">Best PvP Moves</div>`;
+            html += `<div class="moves-list-pvp">`;
+            html += bestMoves.map(move => {
+                let moveDetails = '';
                 
-                // Calculate effective DPE if we have opponent data
-                let effectiveDpeDisplay = '';
-                if (move.dpe && move.move_class === 'charged' && currentOpponent) {
-                    const baseDpe = parseFloat(move.dpe);
-                    const effectiveDpe = parseFloat(calculateEffectiveDPE(move, currentOpponent, pokemonTypes));
-                    if (effectiveDpe !== baseDpe) {
-                        const modifier = effectiveDpe - baseDpe;
-                        const modifierSign = modifier > 0 ? '+' : '';
-                        
-                        // Calculate type effectiveness multiplier
-                        const effectivenessMultiplier = effectiveDpe / baseDpe;
-                        let effectivenessClass = '';
-                        
-                        if (effectivenessMultiplier >= 2.0) {
-                            effectivenessClass = 'dpe-super-effective';
-                        } else if (effectivenessMultiplier >= 1.5) {
-                            effectivenessClass = 'dpe-effective';
-                        } else if (effectivenessMultiplier <= 0.25) {
-                            effectivenessClass = 'dpe-double-resisted';
-                        } else if (effectivenessMultiplier < 1.0) {
-                            effectivenessClass = 'dpe-resisted';
-                        } else {
-                            effectivenessClass = 'dpe-neutral';
-                        }
-                        
-                        effectiveDpeDisplay = `<span class="move-effective-dpe ${effectivenessClass}">(${baseDpe.toFixed(2)} ${modifierSign}${modifier.toFixed(2)} vs ${currentOpponent.name})</span>`;
+                if (move.move_class === 'fast') {
+                    // Fast move details
+                    if (move.power && move.energyGain) {
+                        moveDetails = `<span class="move-details">${move.power} damage, +${move.energyGain} energy</span>`;
+                    } else if (move.power) {
+                        moveDetails = `<span class="move-details">${move.power} damage</span>`;
+                    }
+                } else if (move.move_class === 'charged') {
+                    // Charged move details
+                    if (move.power && move.energy) {
+                        const dpe = (move.power / move.energy).toFixed(2);
+                        moveDetails = `<span class="move-details">${move.power} damage, ${move.energy} energy (DPE: ${dpe})</span>`;
+                    } else if (move.dpe) {
+                        moveDetails = `<span class="move-details">DPE: ${move.dpe}</span>`;
                     }
                 }
                 
                 return `
-                <div class="move-item">
+                <div class="move-item" onclick="event.stopPropagation(); openMoveSelector(null, '${move.name}', '${move.move_class}')">
                     <div class="move-info">
-                        <span class="move-name">${move.name}</span>
-                        <span class="type-badge type-${move.type}">${move.type}</span>
-                        <span class="move-type">(${move.move_class === 'fast' ? 'Fast Move' : 'Charged Move'})</span>
-                        ${move.dpe ? `<span class="move-dpe">DPE: ${currentOpponent && move.move_class === 'charged' ? parseFloat(calculateEffectiveDPE(move, currentOpponent, pokemonTypes)).toFixed(2) : move.dpe}${effectiveDpeDisplay}</span>` : (move.move_class === 'charged' && move.power && move.energy) ? `<span class="move-dpe">DPE: ${currentOpponent ? parseFloat(calculateEffectiveDPE(move, currentOpponent, pokemonTypes)).toFixed(2) : (move.power / move.energy).toFixed(2)}${effectiveDpeDisplay}</span>` : ''}
-                        <span class="move-effectiveness ${effClass}">${move.effectiveness ? move.effectiveness.label : ''}</span>
+                        <div class="move-header">
+                            <span class="move-name">${move.name}</span>
+                            <span class="type-badge type-${move.type}">${move.type}</span>
+                            <span class="move-type">(${move.move_class === 'fast' ? 'Fast' : 'Charged'})</span>
+                            <span class="move-edit-icon">✏️</span>
+                        </div>
+                        ${moveDetails ? `<div class="move-details">${moveDetails}</div>` : ''}
                     </div>
                 </div>
                 `;
-            }
-        }).join('');
-        html += `</div>`;
+            }).join('');
+            html += `</div>`;
+        }
     } else {
         html += '<div class="no-data">No PvP moves found</div>';
     }
@@ -408,9 +424,24 @@ let currentMoveSelector = null;
 window.openMoveSelector = function(slotNumber, currentMoveName, moveClass) {
     currentMoveSelector = { slotNumber, currentMoveName, moveClass, currentMoveName };
     
-    // Get the Pokémon in this slot
-    const pokemon = userTeam.find(p => p.slot === slotNumber);
-    if (!pokemon) return;
+    // Determine if this is a team Pokémon or opponent
+    let pokemon = null;
+    let isOpponent = false;
+    
+    if (slotNumber !== null && slotNumber !== undefined) {
+        // Team Pokémon
+        pokemon = userTeam.find(p => p.slot === slotNumber);
+        isOpponent = false;
+    } else {
+        // Opponent Pokémon
+        pokemon = currentOpponent;
+        isOpponent = true;
+    }
+    
+    if (!pokemon) {
+        console.error('No Pokémon found for move selector');
+        return;
+    }
     
     // Use only speciesId for API calls
     fetch(`/api/pokemon/${encodeURIComponent(pokemon.speciesId)}/moves`)
@@ -422,7 +453,7 @@ window.openMoveSelector = function(slotNumber, currentMoveName, moveClass) {
             }
             
             const moves = moveClass === 'fast' ? data.fast_moves : data.charged_moves;
-            showMoveSelector(moves, currentMoveName, moveClass);
+            showMoveSelector(moves, currentMoveName, moveClass, isOpponent);
         })
         .catch(error => {
             console.error('Error loading moves:', error);
@@ -430,7 +461,7 @@ window.openMoveSelector = function(slotNumber, currentMoveName, moveClass) {
         });
 };
 
-function showMoveSelector(moves, currentMoveName, moveClass) {
+function showMoveSelector(moves, currentMoveName, moveClass, isOpponent = false) {
     // Create modal if it doesn't exist
     let modal = document.getElementById('moveSelectorModal');
     if (!modal) {
@@ -456,6 +487,13 @@ function showMoveSelector(moves, currentMoveName, moveClass) {
         });
     }
     
+    // Update modal title to indicate if it's for opponent
+    const modalTitle = modal.querySelector('.modal-header h3');
+    if (modalTitle) {
+        const pokemonName = isOpponent ? (currentOpponent ? currentOpponent.name : 'Opponent') : 'Team Pokémon';
+        modalTitle.textContent = `Select ${moveClass === 'fast' ? 'Fast' : 'Charged'} Move for ${pokemonName}`;
+    }
+    
     // Populate moves list
     const movesList = document.getElementById('moveSelectorList');
     movesList.innerHTML = moves.map(move => `
@@ -479,9 +517,25 @@ window.selectMove = function(moveName) {
     if (!currentMoveSelector) return;
     
     const { slotNumber, moveClass } = currentMoveSelector;
-    const pokemon = userTeam.find(p => p.slot === slotNumber);
     
-    if (!pokemon) return;
+    // Determine if this is a team Pokémon or opponent
+    let pokemon = null;
+    let isOpponent = false;
+    
+    if (slotNumber !== null && slotNumber !== undefined) {
+        // Team Pokémon
+        pokemon = userTeam.find(p => p.slot === slotNumber);
+        isOpponent = false;
+    } else {
+        // Opponent Pokémon
+        pokemon = currentOpponent;
+        isOpponent = true;
+    }
+    
+    if (!pokemon) {
+        console.error('No Pokémon found for move selection');
+        return;
+    }
     
     // Use only speciesId for API calls
     fetch(`/api/pokemon/${encodeURIComponent(pokemon.speciesId)}/moves`)
@@ -529,29 +583,113 @@ window.selectMove = function(moveName) {
             
             // Update the pvp_moves array - replace the specific move that was clicked
             const currentMoveName = currentMoveSelector.currentMoveName;
+            console.log(`[DEBUG] Replacing move: ${currentMoveName} with: ${selectedMove.name}`);
+            console.log(`[DEBUG] Current pvp_moves:`, pokemon.pvp_moves.map(m => m.name));
+            
+            // First, update the PvPoke moveset to reflect the custom move
+            if (pokemon.pvpoke_moveset && pokemon.pvpoke_moveset.length > 0) {
+                const oldMoveNameUpper = currentMoveName.toUpperCase().replace(/ /g, '_');
+                const newMoveNameUpper = selectedMove.name.toUpperCase().replace(/ /g, '_');
+                const movesetIndex = pokemon.pvpoke_moveset.indexOf(oldMoveNameUpper);
+                
+                if (movesetIndex !== -1) {
+                    pokemon.pvpoke_moveset[movesetIndex] = newMoveNameUpper;
+                    console.log(`[DEBUG] Updated PvPoke moveset: ${oldMoveNameUpper} -> ${newMoveNameUpper}`);
+                }
+            }
+            
+            // Now update the pvp_moves array - replace the specific move that was clicked
             const moveIndex = pokemon.pvp_moves.findIndex(m => m.name === currentMoveName);
+            console.log(`[DEBUG] Found move at index: ${moveIndex}`);
             
             if (moveIndex !== -1) {
                 // Replace the specific move that was clicked
                 pokemon.pvp_moves[moveIndex] = selectedMove;
+                console.log(`[DEBUG] Replaced move at index ${moveIndex}: ${currentMoveName} -> ${selectedMove.name}`);
             } else {
-                // If not found, add it to the appropriate position
+                // If not found, this shouldn't happen, but add it to the appropriate position
+                console.log(`[DEBUG] Move not found in pvp_moves, adding to ${moveClass} moves`);
                 if (moveClass === 'fast') {
+                    // Remove any existing fast moves first
+                    pokemon.pvp_moves = pokemon.pvp_moves.filter(m => m.move_class !== 'fast');
                     pokemon.pvp_moves.unshift(selectedMove);
                 } else {
+                    // For charged moves, add it to the end
                     pokemon.pvp_moves.push(selectedMove);
                 }
             }
             
-            // Update the UI
-            updateTeamSlot(slotNumber, pokemon);
+            // Clean up any duplicate moves that might have been created
+            const seenMoves = new Set();
+            pokemon.pvp_moves = pokemon.pvp_moves.filter(move => {
+                const key = `${move.name}-${move.move_class}`;
+                if (seenMoves.has(key)) {
+                    console.log(`[DEBUG] Removing duplicate move: ${move.name}`);
+                    return false;
+                }
+                seenMoves.add(key);
+                return true;
+            });
+            
+            // Ensure we maintain the correct number of moves per class
+            const fastMoves = pokemon.pvp_moves.filter(m => m.move_class === 'fast');
+            const chargedMoves = pokemon.pvp_moves.filter(m => m.move_class === 'charged');
+            
+            // Keep only 1 fast move and 2 charged moves
+            if (fastMoves.length > 1) {
+                console.log(`[DEBUG] Too many fast moves (${fastMoves.length}), keeping only the first`);
+                const firstFastMove = fastMoves[0];
+                pokemon.pvp_moves = pokemon.pvp_moves.filter(m => m.move_class !== 'fast');
+                pokemon.pvp_moves.unshift(firstFastMove);
+            }
+            
+            if (chargedMoves.length > 2) {
+                console.log(`[DEBUG] Too many charged moves (${chargedMoves.length}), keeping only the first 2`);
+                const firstTwoChargedMoves = chargedMoves.slice(0, 2);
+                pokemon.pvp_moves = pokemon.pvp_moves.filter(m => m.move_class !== 'charged');
+                pokemon.pvp_moves.push(...firstTwoChargedMoves);
+            }
+            
+            // Store custom moveset to track user changes
+            if (!pokemon.customMoveset) {
+                pokemon.customMoveset = {};
+            }
+            pokemon.customMoveset[moveClass] = selectedMove.name;
+            console.log(`[DEBUG] Updated custom moveset:`, pokemon.customMoveset);
+            
+            console.log(`[DEBUG] Updated pvp_moves:`, pokemon.pvp_moves.map(m => m.name));
+            console.log(`[DEBUG] Updated pvpoke_moveset:`, pokemon.pvpoke_moveset);
+            
+            // Update the UI based on whether it's team or opponent
+            if (isOpponent) {
+                // Update opponent Pokémon
+                currentOpponent = pokemon;
+                displayPokemonInfo(currentOpponent);
+            } else {
+                // Update team Pokémon in the userTeam array to ensure battle simulation uses updated moves
+                const teamIndex = userTeam.findIndex(p => p.slot === slotNumber);
+                if (teamIndex !== -1) {
+                    userTeam[teamIndex] = pokemon;
+                }
+                
+                // Update UI
+                updateTeamSlot(slotNumber, pokemon);
+                // Force refresh of all team slots to update DPE displays
+                refreshTeamMovesDisplay();
+            }
+            
             closeMoveSelector();
             
-            // Force refresh of all team slots to update DPE displays
-            refreshTeamMovesDisplay();
+            // Clear battle cache to force fresh simulations with new moves
+            clearBattleCache();
             
-            // Re-run battle simulations
-            onSelectionChange();
+            // Re-run battle simulations and team analysis
+            if (userTeam.length > 0) {
+                updateTeamAnalysis();
+            }
+            onSelectionChange().catch(error => {
+                console.error('Error in onSelectionChange:', error);
+            });
         })
         .catch(error => {
             console.error('Error updating move:', error);
@@ -581,13 +719,54 @@ window.selectTeamPokemonModal = function(pokemonName) {
 
 async function addPokemonToTeam(pokemonName, slotNumber) {
     try {
+        console.log('Adding Pokemon:', pokemonName, 'to slot:', slotNumber);
         const response = await fetch(`/api/pokemon/${encodeURIComponent(pokemonName)}`);
-        const data = await response.json();
-        if (data.error) {
-            alert('Failed to add Pokémon');
+        
+        if (!response.ok) {
+            console.error('API response not ok:', response.status, response.statusText);
+            alert(`Failed to add Pokémon: ${response.status} ${response.statusText}`);
             return;
         }
-        // Always ensure both name and speciesId are present and correct
+        
+        const data = await response.json();
+        console.log('API response data:', data);
+        
+        if (data.error) {
+            console.error('API returned error:', data.error);
+            alert(`Failed to add Pokémon: ${data.error}`);
+            return;
+        }
+        
+        if (!data.name || !data.speciesId) {
+            console.error('Missing required data:', data);
+            alert('Failed to add Pokémon: Invalid data received');
+            return;
+        }
+
+        // --- PATCH: Set default moves to PvPoke best moveset if available ---
+        if (data.pvpoke_moveset && data.pvpoke_moveset.length > 0 && data.pvp_moves && data.pvp_moves.length > 0) {
+            // Find the best fast and charged moves from PvPoke moveset
+            const bestFastMove = data.pvp_moves.find(m => m.move_class === 'fast' && data.pvpoke_moveset.includes(m.name.toUpperCase().replace(/ /g, '_')));
+            const bestChargedMoves = data.pvp_moves.filter(m => m.move_class === 'charged' && data.pvpoke_moveset.includes(m.name.toUpperCase().replace(/ /g, '_')));
+            // If found, set as the first moves in pvp_moves
+            let newPvpMoves = [];
+            if (bestFastMove) newPvpMoves.push(bestFastMove);
+            if (bestChargedMoves.length > 0) newPvpMoves = newPvpMoves.concat(bestChargedMoves);
+            // Fill up to 1 fast + 2 charged if needed
+            if (!bestFastMove) {
+                const fallbackFast = data.pvp_moves.find(m => m.move_class === 'fast');
+                if (fallbackFast) newPvpMoves.unshift(fallbackFast);
+            }
+            while (newPvpMoves.filter(m => m.move_class === 'charged').length < 2) {
+                const fallbackCharged = data.pvp_moves.find(m => m.move_class === 'charged' && !newPvpMoves.includes(m));
+                if (fallbackCharged) newPvpMoves.push(fallbackCharged);
+                else break;
+            }
+            // Replace pvp_moves for this instance
+            data.pvp_moves = newPvpMoves;
+        }
+        // --- END PATCH ---
+        
         userTeam = userTeam.filter(p => p.slot !== slotNumber);
         userTeam.push({
             ...data,
@@ -595,16 +774,36 @@ async function addPokemonToTeam(pokemonName, slotNumber) {
             name: data.name, // display name
             speciesId: data.speciesId // canonical ID for API calls
         });
+        
+        console.log('Updated userTeam:', userTeam);
         updateTeamSlot(slotNumber, data);
         updateTeamAnalysis();
-        onSelectionChange();
+        onSelectionChange().catch(error => {
+            console.error('Error in onSelectionChange:', error);
+        });
+        
+        // Update move rankings immediately if opponent is selected
+        if (currentOpponent) {
+            updateAllTeamSlotsWithMoveRankings();
+        }
     } catch (error) {
-        alert('Failed to add Pokémon');
+        console.error('Error adding Pokemon to team:', error);
+        alert(`Failed to add Pokémon: ${error.message}`);
     }
 }
 
 function updateTeamSlot(slotNumber, pokemon, movesEffectiveness = null, isBestCounter = false) {
+    console.log('updateTeamSlot called with:', { slotNumber, pokemon: pokemon.name });
+    
     const slot = document.querySelector(`[data-slot="${slotNumber}"]`);
+    console.log('Found slot element:', slot);
+    
+    if (!slot) {
+        console.error(`Team slot ${slotNumber} not found in DOM`);
+        console.log('Available slots:', document.querySelectorAll('[data-slot]'));
+        return;
+    }
+    
     slot.classList.add('filled');
     
     // Add or remove best counter class for bold border
@@ -614,14 +813,28 @@ function updateTeamSlot(slotNumber, pokemon, movesEffectiveness = null, isBestCo
         slot.classList.remove('best-counter');
     }
     
-    // Generate moves HTML if PvP moves exist
-    let movesHTML = '';
-    if (pokemon.pvp_moves && pokemon.pvp_moves.length > 0) {
+            // Generate moves HTML - use the actual moves that are currently selected
+            // This ensures that when you change a move, it stays exactly as you selected it
+            let movesHTML = '';
+            if (pokemon.pvp_moves && pokemon.pvp_moves.length > 0) {
+                // Use the actual moves that are currently in the Pokémon's pvp_moves array
+                // This preserves any custom move selections the user has made
+                const fastMoves = pokemon.pvp_moves.filter(m => m.move_class === 'fast');
+                const chargedMoves = pokemon.pvp_moves.filter(m => m.move_class === 'charged');
+                
+                // Take the first fast move and first two charged moves (or all if less than 2)
+                const bestMoves = [
+                    ...fastMoves.slice(0, 1),
+                    ...chargedMoves.slice(0, 2)
+                ];
+                
+                console.log(`[DEBUG] Using actual moves for ${pokemon.name}:`, bestMoves.map(m => m.name));
+        
         movesHTML = `
             <div class="team-moves-section">
-                <h4>PvP Moves</h4>
+                <h4>Best PvP Moves</h4>
                 <div class="team-moves-list">
-                    ${pokemon.pvp_moves.map(move => {
+                    ${bestMoves.map(move => {
                         let effectivenessHTML = '';
                         if (movesEffectiveness && currentOpponent) {
                             const moveEffectiveness = movesEffectiveness.find(m => m.move.name === move.name);
@@ -668,58 +881,171 @@ function updateTeamSlot(slotNumber, pokemon, movesEffectiveness = null, isBestCo
                             }
                         }
                         
-                        // Calculate move ranking for charged moves
-                        if (move.move_class === 'charged' && currentOpponent && pokemon.pvp_moves) {
-                            const chargedMoves = pokemon.pvp_moves.filter(m => m.move_class === 'charged' && m.dpe);
-                            if (chargedMoves.length > 1) {
-                                // Calculate effective DPE for all charged moves
-                                const moveRankings = chargedMoves.map(m => {
-                                    const baseDpe = parseFloat(m.dpe);
-                                    const effectiveDpe = parseFloat(calculateEffectiveDPE(m, currentOpponent, pokemon.types));
+                        // Calculate move ranking for charged moves only (against all available charged moves)
+                        if (move.move_class === 'charged' && pokemon.pvp_moves) {
+                            console.log(`[DEBUG] ${move.name} - Checking for DPE property:`, move.dpe, 'power:', move.power, 'energy:', move.energy);
+                            
+                            // Get ALL available charged moves for this Pokémon (not just currently selected ones)
+                            // We need to fetch the full move list to rank against all options
+                            let allChargedMoves = [];
+                            
+                            // First, try to get moves from the original data if available
+                            if (pokemon.moves && pokemon.moves.length > 0) {
+                                allChargedMoves = pokemon.moves.filter(m => m.move_class === 'charged' && (m.dpe || (m.power && m.energy)));
+                                console.log(`[DEBUG] Using moves from pokemon.moves for ranking:`, allChargedMoves.map(m => m.name));
+                            }
+                            
+                            // If no moves from original data, use pvp_moves but ensure we have all available options
+                            if (allChargedMoves.length === 0) {
+                                allChargedMoves = pokemon.pvp_moves.filter(m => m.move_class === 'charged' && (m.dpe || (m.power && m.energy)));
+                                console.log(`[DEBUG] Using moves from pokemon.pvp_moves for ranking:`, allChargedMoves.map(m => m.name));
+                            }
+                            
+                            // If we still don't have enough moves for ranking, try to get the full move list from the API
+                            if (allChargedMoves.length <= 1 && pokemon.speciesId) {
+                                console.log(`[DEBUG] Not enough moves for ranking, attempting to fetch full move list for ${pokemon.speciesId}`);
+                                // This is a fallback - in a real implementation, we'd want to cache the full move list
+                                // For now, we'll use what we have
+                            }
+                            
+                            console.log(`[DEBUG] Ranking ${move.name} against ${allChargedMoves.length} total charged moves`);
+                            
+                            if (allChargedMoves.length > 1) {
+                                // For charged moves, rank by DPE
+                                const chargedMoves = allChargedMoves;
+                                if (chargedMoves.length > 1) {
+                                    // Calculate DPE for all charged moves (use effective DPE if opponent exists, otherwise base DPE)
+                                    const moveRankings = chargedMoves.map(m => {
+                                        let baseDpe;
+                                        if (m.dpe) {
+                                            baseDpe = parseFloat(m.dpe);
+                                        } else if (m.power && m.energy) {
+                                            baseDpe = parseFloat(m.power) / parseFloat(m.energy);
+                                        } else {
+                                            baseDpe = 0; // Fallback
+                                        }
+                                        const effectiveDpe = currentOpponent ? 
+                                            parseFloat(calculateEffectiveDPE(m, currentOpponent, pokemon.types)) : 
+                                            baseDpe;
+                                        return { move: m, effectiveDpe, baseDpe };
+                                    }).sort((a, b) => b.effectiveDpe - a.effectiveDpe);
+                                    
+                                    // Find this move's rank
+                                    const currentMoveRank = moveRankings.findIndex(r => r.move.name === move.name);
+                                    const bestMove = moveRankings[0];
+                                    const currentMove = moveRankings[currentMoveRank];
+                                    
+                                    if (currentMoveRank >= 0) {
+                                        // Calculate percentage difference from best
+                                        const percentageDiff = ((currentMove.effectiveDpe - bestMove.effectiveDpe) / bestMove.effectiveDpe) * 100;
+                                        
+                                        // Assign ranking class and badge based on percentage difference
+                                        console.log(`[DEBUG] ${move.name} ranked ${currentMoveRank + 1}/${moveRankings.length} (${percentageDiff.toFixed(1)}% from best) - DPE: ${currentMove.effectiveDpe.toFixed(2)} vs best: ${bestMove.effectiveDpe.toFixed(2)}`);
+                                        if (currentMoveRank === 0) {
+                                            moveRankingClass = 'move-best';
+                                            rankingBadge = '<span class="ranking-badge ranking-gold">🥇</span>';
+                                            console.log(`[DEBUG] ${move.name} - ASSIGNED move-best class and gold badge`);
+                                        } else if (percentageDiff >= -10) {
+                                            // Within 10% of best - excellent
+                                            moveRankingClass = 'move-excellent';
+                                            rankingBadge = '<span class="ranking-badge ranking-silver">🥈</span>';
+                                            console.log(`[DEBUG] ${move.name} - ASSIGNED move-excellent class and silver badge`);
+                                        } else if (percentageDiff >= -25) {
+                                            // Within 25% of best - good
+                                            moveRankingClass = 'move-good';
+                                            rankingBadge = '<span class="ranking-badge ranking-bronze">🥉</span>';
+                                            console.log(`[DEBUG] ${move.name} - ASSIGNED move-good class and bronze badge`);
+                                        } else if (percentageDiff >= -50) {
+                                            // Within 50% of best - mediocre
+                                            moveRankingClass = 'move-mediocre';
+                                            rankingBadge = '<span class="ranking-badge ranking-mediocre">⚠️</span>';
+                                            console.log(`[DEBUG] ${move.name} - ASSIGNED move-mediocre class and mediocre badge`);
+                                        } else {
+                                            // More than 50% worse than best - poor
+                                            moveRankingClass = 'move-poor';
+                                            rankingBadge = '<span class="ranking-badge ranking-poor">❌</span>';
+                                            console.log(`[DEBUG] ${move.name} - ASSIGNED move-poor class and poor badge`);
+                                        }
+                                        
+                                        // Add percentage indicator for non-best moves
+                                        if (currentMoveRank > 0) {
+                                            rankingBadge += `<span class="ranking-percentage">${percentageDiff.toFixed(1)}%</span>`;
+                                        }
+                                    } else {
+                                        console.log(`[DEBUG] ${move.name} - Could not find move in rankings`);
+                                    }
+                                } else {
+                                    console.log(`[DEBUG] ${move.name} - Only one charged move available, no ranking needed`);
+                                }
+                            } else {
+                                console.log(`[DEBUG] ${move.name} - No charged moves with DPE available for ranking`);
+                                // If this is the only charged move, give it a default "good" rating
+                                if (allChargedMoves.length === 1) {
+                                    moveRankingClass = 'move-good';
+                                    rankingBadge = '<span class="ranking-badge ranking-bronze">🥉</span>';
+                                    console.log(`[DEBUG] ${move.name} - Only charged move available, assigning default good rating`);
+                                }
+                            }
+                        } else {
+                            console.log(`[DEBUG] ${move.name} - Not a charged move or no pvp_moves available`);
+                        }
+                        
+                        // Calculate if this move is significantly better (20% or more) than other moves
+                        let significantBetterClass = '';
+                        if (move.move_class === 'charged' && pokemon.pvp_moves) {
+                            // Get ALL available charged moves for this Pokémon (not just currently selected ones)
+                            let allChargedMoves = [];
+                            
+                            // First, try to get moves from the original data if available
+                            if (pokemon.moves && pokemon.moves.length > 0) {
+                                allChargedMoves = pokemon.moves.filter(m => m.move_class === 'charged' && (m.dpe || (m.power && m.energy)));
+                                console.log(`[DEBUG] Using moves from pokemon.moves for significant better check:`, allChargedMoves.map(m => m.name));
+                            }
+                            
+                            // If no moves from original data, use pvp_moves but ensure we have all available options
+                            if (allChargedMoves.length === 0) {
+                                allChargedMoves = pokemon.pvp_moves.filter(m => m.move_class === 'charged' && (m.dpe || (m.power && m.energy)));
+                                console.log(`[DEBUG] Using moves from pokemon.pvp_moves for significant better check:`, allChargedMoves.map(m => m.name));
+                            }
+                            
+                            if (allChargedMoves.length > 1) {
+                                const moveRankings = allChargedMoves.map(m => {
+                                    let baseDpe;
+                                    if (m.dpe) {
+                                        baseDpe = parseFloat(m.dpe);
+                                    } else if (m.power && m.energy) {
+                                        baseDpe = parseFloat(m.power) / parseFloat(m.energy);
+                                    } else {
+                                        baseDpe = 0; // Fallback
+                                    }
+                                    const effectiveDpe = currentOpponent ? 
+                                        parseFloat(calculateEffectiveDPE(m, currentOpponent, pokemon.types)) : 
+                                        baseDpe;
                                     return { move: m, effectiveDpe, baseDpe };
                                 }).sort((a, b) => b.effectiveDpe - a.effectiveDpe);
                                 
-                                // Find this move's rank
                                 const currentMoveRank = moveRankings.findIndex(r => r.move.name === move.name);
                                 const bestMove = moveRankings[0];
                                 const currentMove = moveRankings[currentMoveRank];
                                 
-                                if (currentMoveRank >= 0) {
+                                if (currentMoveRank >= 0 && currentMoveRank > 0) {
                                     // Calculate percentage difference from best
                                     const percentageDiff = ((currentMove.effectiveDpe - bestMove.effectiveDpe) / bestMove.effectiveDpe) * 100;
                                     
-                                    // Assign ranking class and badge based on percentage difference
-                                    if (currentMoveRank === 0) {
-                                        moveRankingClass = 'move-best';
-                                        rankingBadge = '<span class="ranking-badge ranking-gold">🥇</span>';
-                                    } else if (percentageDiff >= -10) {
-                                        // Within 10% of best - excellent
-                                        moveRankingClass = 'move-excellent';
-                                        rankingBadge = '<span class="ranking-badge ranking-silver">🥈</span>';
-                                    } else if (percentageDiff >= -25) {
-                                        // Within 25% of best - good
-                                        moveRankingClass = 'move-good';
-                                        rankingBadge = '<span class="ranking-badge ranking-bronze">🥉</span>';
-                                    } else if (percentageDiff >= -50) {
-                                        // Within 50% of best - mediocre
-                                        moveRankingClass = 'move-mediocre';
-                                        rankingBadge = '<span class="ranking-badge ranking-mediocre">⚠️</span>';
-                                    } else {
-                                        // More than 50% worse than best - poor
-                                        moveRankingClass = 'move-poor';
-                                        rankingBadge = '<span class="ranking-badge ranking-poor">❌</span>';
-                                    }
-                                    
-                                    // Add percentage indicator for non-best moves
-                                    if (currentMoveRank > 0) {
-                                        rankingBadge += `<span class="ranking-percentage">${percentageDiff.toFixed(1)}%</span>`;
+                                    // If this move is within 20% of the best, mark it as significantly better
+                                    if (percentageDiff >= -20) {
+                                        significantBetterClass = 'move-significantly-better';
+                                        console.log(`[DEBUG] ${move.name} is significantly better (${percentageDiff.toFixed(1)}% from best) - adding green background`);
                                     }
                                 }
                             }
                         }
                         
+                        console.log(`[DEBUG] ${move.name} - moveRankingClass: "${moveRankingClass}", significantBetterClass: "${significantBetterClass}"`);
+                        console.log(`[DEBUG] ${move.name} - Final HTML classes: "move-item ${moveRankingClass} ${significantBetterClass}"`);
+                        console.log(`[DEBUG] ${move.name} - Ranking badge HTML: "${rankingBadge}"`);
                         return `
-                            <div class="move-item ${moveRankingClass}" onclick="event.stopPropagation(); openMoveSelector('${slotNumber}', '${move.name}', '${move.move_class}')">
+                            <div class="move-item ${moveRankingClass} ${significantBetterClass}" onclick="event.stopPropagation(); openMoveSelector('${slotNumber}', '${move.name}', '${move.move_class}')">
                                 <div class="move-info">
                                     <div class="move-name">${rankingBadge}${move.name}</div>
                                     <div class="move-details">
@@ -727,6 +1053,7 @@ function updateTeamSlot(slotNumber, pokemon, movesEffectiveness = null, isBestCo
                                         <span class="move-type">(${move.move_class === 'fast' ? 'Fast Move' : 'Charged Move'})</span>
                                         ${move.dpe ? `<span class="move-dpe">DPE: ${currentOpponent && move.move_class === 'charged' ? parseFloat(calculateEffectiveDPE(move, currentOpponent, pokemon.types)).toFixed(2) : move.dpe}${effectiveDpeDisplay}</span>` : (move.move_class === 'charged' && move.power && move.energy) ? `<span class="move-dpe">DPE: ${currentOpponent ? parseFloat(calculateEffectiveDPE(move, currentOpponent, pokemon.types)).toFixed(2) : (move.power / move.energy).toFixed(2)}${effectiveDpeDisplay}</span>` : ''}
                                         ${effectivenessHTML}
+                                        <span class="move-edit-icon">✏️</span>
                                     </div>
                                 </div>
                             </div>
@@ -741,8 +1068,26 @@ function updateTeamSlot(slotNumber, pokemon, movesEffectiveness = null, isBestCo
     let battleResultHTML = '';
     if (currentOpponent) {
         // Find battle result for this team member
+        console.log('[DEBUG] Looking for battle result for:', pokemon.name);
+        console.log('[DEBUG] Available battle results:', window.currentBattleResults);
+        
         const battleResult = window.currentBattleResults ? 
-            window.currentBattleResults.find(result => result.teamPokemon.name === pokemon.name) : null;
+            window.currentBattleResults.find(result => {
+                console.log('[DEBUG] Checking result:', result.teamPokemon.name, 'vs', pokemon.name);
+                return result.teamPokemon.name === pokemon.name;
+            }) : null;
+        
+        console.log('[DEBUG] Found battle result:', battleResult);
+        if (battleResult) {
+            console.log('[DEBUG] Battle result details:', {
+                winner: battleResult.battleResult.winner,
+                teamHp: battleResult.battleResult.p1_final_hp,
+                opponentHp: battleResult.battleResult.p2_final_hp,
+                battleRating: battleResult.battleResult.battle_rating
+            });
+        } else {
+            console.log('[DEBUG] No battle result found for:', pokemon.name);
+        }
         
         if (battleResult) {
             const winner = battleResult.battleResult.winner;
@@ -811,6 +1156,7 @@ function updateTeamSlot(slotNumber, pokemon, movesEffectiveness = null, isBestCo
                         <div class="rating-value rating-${ratingColor}">${ratingDisplay}</div>
                         <div class="winner-indicator ${winnerClass}">${winnerText}</div>
                         <div class="hp-details">You: ${teamHpRemaining} HP | Opponent: ${opponentHpRemaining} HP</div>
+                        <div class="battle-rating">Rating: ${(battleResult.battleResult.battle_rating * 100).toFixed(1)}%</div>
                     </div>
                 </div>
             `;
@@ -826,46 +1172,61 @@ function updateTeamSlot(slotNumber, pokemon, movesEffectiveness = null, isBestCo
         }
     }
     
-    slot.innerHTML = `
-        <div class="slot-content">
-            <div class="pokemon-in-slot">
-                <div class="pokemon-left-section">
-                    <div class="pokemon-name">${pokemon.name}</div>
-                    <img src="${pokemon.sprite}" alt="${pokemon.name}" onerror="console.error('Failed to load image:', this.src)" onload="console.log('Successfully loaded image:', this.src)">
-                    <div class="pokemon-types">
-                        ${pokemon.types.map(type => `<span class="type-badge type-${type}">${type}</span>`).join('')}
+    if (slot) {
+        slot.innerHTML = `
+            <div class="slot-content">
+                <div class="pokemon-in-slot">
+                    <div class="pokemon-left-section">
+                        <div class="pokemon-name">${pokemon.name}</div>
+                        <img src="${pokemon.sprite}" alt="${pokemon.name}" onerror="console.error('Failed to load image:', this.src)" onload="console.log('Successfully loaded image:', this.src)">
+                        <div class="pokemon-types">
+                            ${pokemon.types.map(type => `<span class="type-badge type-${type}">${type}</span>`).join('')}
+                        </div>
                     </div>
+                    <div class="pokemon-right-section">
+                        ${movesHTML}
+                        ${battleResultHTML}
+                    </div>
+                    <button class="remove-pokemon" onclick="removePokemonFromTeam('${slotNumber}')">×</button>
                 </div>
-                <div class="pokemon-right-section">
-                    ${movesHTML}
-                    ${battleResultHTML}
-                </div>
-                <button class="remove-pokemon" onclick="removePokemonFromTeam('${slotNumber}')">×</button>
             </div>
-        </div>
-    `;
+        `;
+    } else {
+        console.error(`Cannot update slot ${slotNumber} - element not found`);
+    }
 }
 
 function removePokemonFromTeam(slotNumber) {
     userTeam = userTeam.filter(p => p.slot !== slotNumber);
     
     const slot = document.querySelector(`[data-slot="${slotNumber}"]`);
-    slot.classList.remove('filled');
-    slot.innerHTML = `
-        <div class="slot-content">
-            <div class="add-pokemon">
-                <span class="plus-icon">+</span>
-                <span class="add-text">Add Pokemon</span>
+    if (slot) {
+        slot.classList.remove('filled');
+        slot.innerHTML = `
+            <div class="slot-content">
+                <div class="add-pokemon">
+                    <span class="plus-icon">+</span>
+                    <span class="add-text">Add Pokemon</span>
+                </div>
             </div>
-        </div>
-    `;
+        `;
+    } else {
+        console.error(`Cannot remove from slot ${slotNumber} - element not found`);
+    }
     
     updateTeamAnalysis();
-    onSelectionChange();
+    onSelectionChange().catch(error => {
+        console.error('Error in onSelectionChange:', error);
+    });
 }
 
 function updateTeamAnalysis() {
     const teamAnalysis = document.getElementById('teamAnalysis');
+    
+    if (!teamAnalysis) {
+        console.error('teamAnalysis element not found');
+        return;
+    }
     
     if (userTeam.length === 0) {
         teamAnalysis.classList.add('hidden');
@@ -878,9 +1239,16 @@ function updateTeamAnalysis() {
     const coverage = calculateTeamCoverage();
     displayTeamCoverage(coverage);
     
+    // Calculate team weaknesses, strengths, and missing coverage
+    calculateTeamWeaknesses();
+    calculateTeamStrengths();
+    calculateMissingCoverage();
+    
     // Run battle simulations if there's a current opponent
     if (currentOpponent) {
-        runBattleSimulations();
+        runBattleSimulations().catch(error => {
+            console.error('Error running battle simulations:', error);
+        });
     }
 }
 
@@ -913,6 +1281,11 @@ function calculateTeamCoverage() {
 function displayTeamCoverage(coverage) {
     const coverageGrid = document.getElementById('teamCoverage');
     
+    if (!coverageGrid) {
+        console.error('teamCoverage element not found');
+        return;
+    }
+    
     const coverageHTML = Object.entries(coverage)
         .filter(([type, data]) => data.count > 0)
         .sort((a, b) => b[1].count - a[1].count)
@@ -924,6 +1297,136 @@ function displayTeamCoverage(coverage) {
         `).join('');
     
     coverageGrid.innerHTML = coverageHTML || '<div class="no-data">No coverage data</div>';
+}
+
+function calculateTeamWeaknesses() {
+    const allTypes = ['normal', 'fire', 'water', 'electric', 'grass', 'ice', 'fighting', 
+                     'poison', 'ground', 'flying', 'psychic', 'bug', 'rock', 'ghost', 
+                     'dragon', 'dark', 'steel', 'fairy'];
+    
+    const teamWeaknesses = {};
+    
+    // For each type, check if it's super effective against any team member
+    allTypes.forEach(attackingType => {
+        let totalEffectiveness = 0;
+        let affectedPokemon = [];
+        
+        userTeam.forEach(pokemon => {
+            if (pokemon.effectiveness && pokemon.effectiveness.effectiveness) {
+                const effectiveness = pokemon.effectiveness.effectiveness[attackingType] || 1;
+                if (effectiveness > 1) {
+                    totalEffectiveness += effectiveness;
+                    affectedPokemon.push(pokemon.name);
+                }
+            }
+        });
+        
+        if (totalEffectiveness > 0) {
+            teamWeaknesses[attackingType] = {
+                effectiveness: totalEffectiveness,
+                affectedPokemon: affectedPokemon
+            };
+        }
+    });
+    
+    // Display team weaknesses
+    const weaknessesList = document.getElementById('teamWeaknesses');
+    console.log('Looking for teamWeaknesses element:', weaknessesList);
+    if (weaknessesList) {
+        const weaknessesHTML = Object.entries(teamWeaknesses)
+            .sort((a, b) => b[1].effectiveness - a[1].effectiveness)
+            .map(([type, data]) => `
+                <span class="type-badge type-${type}" title="Affects: ${data.affectedPokemon.join(', ')}">${type}</span>
+            `).join('');
+        
+        weaknessesList.innerHTML = weaknessesHTML || '<div class="no-data">No major weaknesses</div>';
+        console.log('Updated teamWeaknesses with:', weaknessesHTML);
+    } else {
+        console.error('teamWeaknesses element not found');
+    }
+}
+
+function calculateTeamStrengths() {
+    const allTypes = ['normal', 'fire', 'water', 'electric', 'grass', 'ice', 'fighting', 
+                     'poison', 'ground', 'flying', 'psychic', 'bug', 'rock', 'ghost', 
+                     'dragon', 'dark', 'steel', 'fairy'];
+    
+    const teamStrengths = {};
+    
+    // For each type, check if the team resists it well
+    allTypes.forEach(attackingType => {
+        let totalResistance = 0;
+        let resistantPokemon = [];
+        
+        userTeam.forEach(pokemon => {
+            if (pokemon.effectiveness && pokemon.effectiveness.effectiveness) {
+                const effectiveness = pokemon.effectiveness.effectiveness[attackingType] || 1;
+                if (effectiveness < 1) {
+                    totalResistance += (1 - effectiveness);
+                    resistantPokemon.push(pokemon.name);
+                }
+            }
+        });
+        
+        if (totalResistance > 0) {
+            teamStrengths[attackingType] = {
+                resistance: totalResistance,
+                resistantPokemon: resistantPokemon
+            };
+        }
+    });
+    
+    // Display team strengths
+    const strengthsList = document.getElementById('teamStrengths');
+    if (strengthsList) {
+        const strengthsHTML = Object.entries(teamStrengths)
+            .sort((a, b) => b[1].resistance - a[1].resistance)
+            .map(([type, data]) => `
+                <span class="type-badge type-${type}" title="Resisted by: ${data.resistantPokemon.join(', ')}">${type}</span>
+            `).join('');
+        
+        strengthsList.innerHTML = strengthsHTML || '<div class="no-data">No major resistances</div>';
+    } else {
+        console.error('teamStrengths element not found');
+    }
+}
+
+function calculateMissingCoverage() {
+    const allTypes = ['normal', 'fire', 'water', 'electric', 'grass', 'ice', 'fighting', 
+                     'poison', 'ground', 'flying', 'psychic', 'bug', 'rock', 'ghost', 
+                     'dragon', 'dark', 'steel', 'fairy'];
+    
+    const missingTypes = [];
+    
+    // Check which types the team doesn't cover well
+    allTypes.forEach(type => {
+        let hasCoverage = false;
+        
+        userTeam.forEach(pokemon => {
+            if (pokemon.effectiveness && pokemon.effectiveness.effectiveness) {
+                const effectiveness = pokemon.effectiveness.effectiveness[type] || 1;
+                if (effectiveness > 1) {
+                    hasCoverage = true;
+                }
+            }
+        });
+        
+        if (!hasCoverage) {
+            missingTypes.push(type);
+        }
+    });
+    
+    // Display missing coverage
+    const missingList = document.getElementById('missingCoverage');
+    if (missingList) {
+        const missingHTML = missingTypes.map(type => `
+            <span class="type-badge type-${type}">${type}</span>
+        `).join('');
+        
+        missingList.innerHTML = missingHTML || '<div class="no-data">Good coverage!</div>';
+    } else {
+        console.error('missingCoverage element not found');
+    }
 }
 
 // Close search results when clicking outside
@@ -1287,7 +1790,9 @@ function calculateMoveEffectiveness(move, defendingTypes) {
         }
     });
     
-    if (multiplier > 1) {
+    if (multiplier === 0) {
+        return { label: 'Immune', multiplier: 0 };
+    } else if (multiplier > 1) {
         return { label: 'Super Effective', multiplier: multiplier };
     } else if (multiplier < 1 && multiplier > 0) {
         return { label: 'Not Very Effective', multiplier: multiplier };
@@ -1341,11 +1846,22 @@ function refreshTeamMovesDisplay() {
     });
 }
 
-function onSelectionChange() {
+function updateAllTeamSlotsWithMoveRankings() {
+    // This function specifically updates team slots to show move rankings
+    userTeam.forEach(pokemon => {
+        updateTeamSlot(pokemon.slot, pokemon, null, false);
+    });
+}
+
+async function onSelectionChange() {
     if (currentOpponent && userTeam.length > 0) {
-        runBattleSimulations();
-        refreshTeamMovesDisplay();
-        updateMatchupAnalysis(); // Add matchup analysis
+        await runBattleSimulations();
+        await updateMatchupAnalysis(); // Add matchup analysis
+        
+        // Update all team slots to show move rankings and effectiveness with opponent context
+        userTeam.forEach(pokemon => {
+            updateTeamSlot(pokemon.slot, pokemon, null, false);
+        });
     } else {
         // Clear effectiveness from team slots when no opponent
         userTeam.forEach(pokemon => {
@@ -1359,9 +1875,6 @@ function onSelectionChange() {
         if (matchupTable) {
             matchupTable.innerHTML = '';
         }
-        
-        // Refresh team moves display to show base DPE without opponent
-        refreshTeamMovesDisplay();
     }
 }
 
@@ -1379,7 +1892,13 @@ function initBattleSimulations() {
         // Clear cache and re-run simulations if opponent is selected
         if (currentOpponent) {
             battleSimulationState.simulations = {};
-            runBattleSimulations();
+            runBattleSimulations().catch(error => {
+                console.error('Error running battle simulations:', error);
+            });
+            // Update move rankings and effectiveness since shield count affects effective DPE
+            userTeam.forEach(pokemon => {
+                updateTeamSlot(pokemon.slot, pokemon, null, false);
+            });
         }
     });
 }
@@ -1406,17 +1925,17 @@ async function runBattleSimulations() {
         console.log('Using speciesIds:', teamPokemon.speciesId, currentOpponent.speciesId);
 
         try {
-            // Get PvP moves for team Pokémon (use speciesId)
-            const teamMoves = await getPvPMovesForPokemon(teamPokemon.speciesId);
-            console.log(`Team moves for ${teamPokemon.name}:`, teamMoves);
+            // Use the actual moves from the Pokémon data (including custom movesets)
+            let teamMoves = teamPokemon.pvp_moves || [];
+            console.log(`[BATTLE DEBUG] Team moves for ${teamPokemon.name}:`, teamMoves.map(m => `${m.name} (${m.move_class})`));
             if (!teamMoves || teamMoves.length === 0) {
                 console.log(`No PvP moves found for ${teamPokemon.name}`);
                 continue;
             }
 
-            // Get PvP moves for opponent (use speciesId)
-            const opponentMoves = await getPvPMovesForPokemon(currentOpponent.speciesId);
-            console.log(`Opponent moves for ${currentOpponent.name}:`, opponentMoves);
+            // Use the actual moves from the opponent data (including custom movesets)
+            let opponentMoves = currentOpponent.pvp_moves || [];
+            console.log(`[BATTLE DEBUG] Opponent moves for ${currentOpponent.name}:`, opponentMoves.map(m => `${m.name} (${m.move_class})`));
             if (!opponentMoves || opponentMoves.length === 0) {
                 console.log(`No PvP moves found for ${currentOpponent.name}`);
                 continue;
@@ -1475,19 +1994,49 @@ async function getPvPMovesForPokemon(speciesId) {
 async function runSingleBattle(teamPokemon, teamMoves, opponentPokemon, opponentMoves, shieldCount, p1ShieldAI, p2ShieldAI) {
     console.log('Running single battle with:', { teamPokemon, teamMoves, opponentPokemon, opponentMoves, shieldCount });
     
-    // Prepare battle data using best PvP moves
-    const teamFastMove = teamMoves.find(m => m.move_class === 'fast');
-    const teamChargedMoves = teamMoves.filter(m => m.move_class === 'charged').slice(0, 2);
+    // Prepare battle data using the same "best moves" logic as the UI
+    let teamFastMove, teamChargedMoves, opponentFastMove, opponentChargedMoves;
     
-    const opponentFastMove = opponentMoves.find(m => m.move_class === 'fast');
-    const opponentChargedMoves = opponentMoves.filter(m => m.move_class === 'charged').slice(0, 2);
+    // For team Pokémon - use the actual moves that are currently selected (no PvPoke filtering)
+    // This ensures battle simulation uses the moves the user actually selected
+    teamFastMove = teamMoves.find(m => m.move_class === 'fast');
+    
+    // Get the charged moves that are actually being used
+    // IMPORTANT: Use the moves that are actually displayed in the UI, not the original teamMoves
+    teamChargedMoves = [];
+    
+    // If the Pokémon has custom moveset, use those moves
+    if (teamPokemon.customMoveset && teamPokemon.customMoveset.charged) {
+        // Find the custom charged move in the available moves
+        const customMove = teamMoves.find(m => m.move_class === 'charged' && m.name === teamPokemon.customMoveset.charged);
+        if (customMove) {
+            teamChargedMoves.push(customMove);
+            console.log('[BATTLE DEBUG] Using custom charged move:', customMove.name);
+        }
+    }
+    
+    // Add the remaining charged moves (up to 2 total)
+    const remainingChargedMoves = teamMoves.filter(m => m.move_class === 'charged' && 
+        (!teamPokemon.customMoveset || m.name !== teamPokemon.customMoveset.charged));
+    
+    for (let i = 0; i < remainingChargedMoves.length && teamChargedMoves.length < 2; i++) {
+        teamChargedMoves.push(remainingChargedMoves[i]);
+    }
+    
+    console.log('[BATTLE DEBUG] Final team charged moves:', teamChargedMoves.map(m => m.name));
+    
+    // For opponent Pokémon - use the actual moves that are currently selected (no PvPoke filtering)
+    // This ensures battle simulation uses the moves that are actually displayed in the UI
+    opponentFastMove = opponentMoves.find(m => m.move_class === 'fast');
+    opponentChargedMoves = opponentMoves.filter(m => m.move_class === 'charged').slice(0, 2);
 
-    console.log('Selected moves:', {
-        teamFastMove,
-        teamChargedMoves,
-        opponentFastMove,
-        opponentChargedMoves
+    console.log('[BATTLE DEBUG] Selected moves for battle:', {
+        teamFastMove: teamFastMove ? `${teamFastMove.name} (${teamFastMove.move_class})` : 'None',
+        teamChargedMoves: teamChargedMoves.map(m => `${m.name} (${m.move_class})`),
+        opponentFastMove: opponentFastMove ? `${opponentFastMove.name} (${opponentFastMove.move_class})` : 'None',
+        opponentChargedMoves: opponentChargedMoves.map(m => `${m.name} (${m.move_class})`)
     });
+    console.log('[BATTLE DEBUG] Team custom moveset:', teamPokemon.customMoveset);
 
     // Use speciesId for API calls (handles alternate forms correctly)
     let teamId = teamPokemon.speciesId || teamPokemon.name;
@@ -1577,11 +2126,15 @@ async function runSingleBattle(teamPokemon, teamMoves, opponentPokemon, opponent
 }
 
 function displayBattleSimulations(results) {
+    console.log('[DEBUG] displayBattleSimulations called with results:', results);
+    
     // Store results globally for team slots to access
     window.currentBattleResults = results;
+    console.log('[DEBUG] Stored battle results globally:', window.currentBattleResults);
     
     // Update all team slots to show battle results
     userTeam.forEach(pokemon => {
+        console.log('[DEBUG] Updating team slot for:', pokemon.name, 'in slot:', pokemon.slot);
         updateTeamSlot(pokemon.slot, pokemon);
     });
 
@@ -1635,7 +2188,9 @@ function initLeagueAndShieldSelectors() {
             
             // Trigger battle simulation update if we have an opponent
             if (currentOpponent && userTeam.length > 0) {
-                runBattleSimulations();
+                runBattleSimulations().catch(error => {
+                    console.error('Error running battle simulations:', error);
+                });
             }
         });
     }
@@ -1650,7 +2205,9 @@ function initLeagueAndShieldSelectors() {
             console.log('Shield AI changed to:', this.value);
             // Trigger battle simulation update if we have an opponent
             if (currentOpponent && userTeam.length > 0) {
-                runBattleSimulations();
+                runBattleSimulations().catch(error => {
+                    console.error('Error running battle simulations:', error);
+                });
             }
         });
     }
