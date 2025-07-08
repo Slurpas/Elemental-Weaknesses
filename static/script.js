@@ -679,6 +679,9 @@ window.selectMove = function(moveName) {
                 // Update opponent Pokémon
                 currentOpponent = pokemon;
                 displayPokemonInfo(currentOpponent);
+                
+                // Update matchup table immediately with new opponent moves
+                renderOpponentMovesVsTeam();
             } else {
                 // Update team Pokémon in the userTeam array to ensure battle simulation uses updated moves
                 const teamIndex = userTeam.findIndex(p => p.slot === slotNumber);
@@ -1671,7 +1674,7 @@ async function updateMatchupAnalysis() {
             // Recalculate team analysis panels
             updateTeamAnalysis();
         }
-        renderOpponentMovesVsTeam(data.opponent_moves_vs_team, data.team);
+        renderOpponentMovesVsTeam();
         updateAllTeamSlotsWithEffectiveness(data.team_moves_vs_opponent);
     } catch (e) {
         console.error('Failed to fetch matchup analysis:', e);
@@ -1818,42 +1821,33 @@ function calculateMoveEffectiveness(move, defendingTypes) {
 
 function renderOpponentMovesVsTeam(opponentMovesVsTeam, teamNames) {
     let html = '';
-    if (!opponentMovesVsTeam || opponentMovesVsTeam.length === 0) {
-        html = '<div class="no-data">No matchup data</div>';
+    if (!currentOpponent || !currentOpponent.pvp_moves || currentOpponent.pvp_moves.length === 0) {
+        html = '<div class="no-data">No opponent moves available</div>';
     } else {
-        // Only show opponent's best PvP moves (from pvpoke_moveset)
-        let bestMoveNames = [];
-        if (currentOpponent && currentOpponent.pvpoke_moveset && currentOpponent.pvpoke_moveset.length > 0) {
-            bestMoveNames = currentOpponent.pvpoke_moveset.map(m => m.replace(/_/g, ' ').toLowerCase());
-        }
-        // Filter the columns to only those moves
-        let filteredOpponentMoves = opponentMovesVsTeam.filter(row => {
-            const moveNameLower = row.move.name.toLowerCase();
-            return bestMoveNames.includes(moveNameLower);
-        });
-        // Fallback: if no best moves found, show the first 3 moves
-        if (filteredOpponentMoves.length === 0) {
-            filteredOpponentMoves = opponentMovesVsTeam.slice(0, 3);
-        }
-        console.log('[DEBUG] Opponent moves shown in matchup table:', filteredOpponentMoves.map(r => r.move.name));
+        // Generate matchup data dynamically based on current opponent moves
+        const currentOpponentMoves = currentOpponent.pvp_moves;
+        console.log('[DEBUG] Opponent moves shown in matchup table:', currentOpponentMoves.map(m => m.name));
+        
         // Table header: Opponent's moves
         html += `<table class="matchup-table"><thead><tr><th>Your Pokémon</th>`;
-        filteredOpponentMoves.forEach(row => {
-            html += `<th><span class="move-name">${row.move.name}</span><br><span class="type-badge type-${row.move.type}">${row.move.type}</span><br><span class="move-type">(${row.move.move_class})</span></th>`;
+        currentOpponentMoves.forEach(move => {
+            html += `<th><span class="move-name">${move.name}</span><br><span class="type-badge type-${move.type}">${move.type}</span><br><span class="move-type">(${move.move_class})</span></th>`;
         });
         html += `</tr></thead><tbody>`;
+        
         // Table rows: Your team
-        teamNames.forEach((teamName, teamIndex) => {
-            html += `<tr><td><strong>${teamName}</strong></td>`;
-            filteredOpponentMoves.forEach(row => {
-                const cell = row.vs_team[teamIndex];
+        userTeam.forEach((teamPokemon, teamIndex) => {
+            html += `<tr><td><strong>${teamPokemon.name}</strong></td>`;
+            currentOpponentMoves.forEach(move => {
+                // Calculate effectiveness of opponent's move against this team member
+                const effectiveness = calculateMoveEffectiveness(move, teamPokemon.types);
                 let effClass = '';
-                if (cell.effectiveness.label === 'Super Effective') effClass = 'move-eff-super';
-                else if (cell.effectiveness.label === 'Not Very Effective') effClass = 'move-eff-notvery';
-                else if (cell.effectiveness.label === 'Immune') effClass = 'move-eff-immune';
+                if (effectiveness.label === 'Super Effective') effClass = 'move-eff-super';
+                else if (effectiveness.label === 'Not Very Effective') effClass = 'move-eff-notvery';
+                else if (effectiveness.label === 'Immune') effClass = 'move-eff-immune';
                 else effClass = 'move-eff-neutral';
-                html += `<td><span class="move-effectiveness ${effClass}">${cell.effectiveness.label}</span>`;
-                html += ` <span class="move-multiplier">(${cell.effectiveness.multiplier}x)</span>`;
+                html += `<td><span class="move-effectiveness ${effClass}">${effectiveness.label}</span>`;
+                html += ` <span class="move-multiplier">(${effectiveness.multiplier}x)</span>`;
                 html += `</td>`;
             });
             html += `</tr>`;
