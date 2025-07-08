@@ -7,6 +7,12 @@ A web application to quickly look up Pokemon weaknesses, resistances, and moves 
 - **Search Pokemon**: Type any Pokemon name to get instant results
 - **Type Effectiveness**: View weaknesses (2x damage), resistances (0.5x damage), and immunities (0x damage)
 - **Move Information**: See common moves with their type, power, accuracy, and PP
+- **Team Building**: Build and analyze teams of up to 3 Pokemon
+- **Battle Simulation**: Run realistic PvP battles with customizable settings
+- **Shield AI**: Multiple AI strategies for shield usage (smart, aggressive, conservative, etc.)
+- **League Support**: Great League (1500 CP), Ultra League (2500 CP), Master League, and Little Cup (500 CP)
+- **Real-time Analysis**: Automatic team coverage analysis and opponent matchup calculations
+- **Analytics Dashboard**: Track usage statistics, popular Pokemon, and battle simulations
 - **Mobile-Friendly**: Responsive design that works great on phones during battles
 - **Fast Loading**: Cached data for quick access to frequently searched Pokemon
 

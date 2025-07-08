@@ -2486,6 +2486,17 @@ h3, h4 {
   box-shadow: 0 4px 12px rgba(23, 162, 184, 0.3);
 }
 
+.analytics-btn {
+  background: linear-gradient(135deg, #9b59b6 0%, #8e44ad 100%);
+  color: white;
+}
+
+.analytics-btn:hover {
+  background: linear-gradient(135deg, #8e44ad 0%, #7d3c98 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(155, 89, 182, 0.3);
+}
+
 @media (max-width: 768px) {
   .footer-content {
     flex-direction: column;

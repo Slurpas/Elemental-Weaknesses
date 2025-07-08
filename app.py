@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, session, request, redirect, url_for, render_template_string
 import requests
 import json
 from datetime import datetime, timedelta
@@ -10,6 +10,7 @@ import secrets
 import os
 from poke_data import PokeData
 from battle_sim import BattleSimulator
+from analytics import analytics
 
 app = Flask(__name__)
 
@@ -155,6 +156,8 @@ def cache_pokemon(name, data):
 @app.route('/')
 def index():
     """Serve the main webpage"""
+    # Track page visit
+    analytics.track_visit(request.remote_addr, request.headers.get('User-Agent', ''))
     return render_template('index.html')
 
 def get_move_effectiveness(move_type, defender_types):
@@ -316,6 +319,11 @@ def search_pokemon(query):
             }]
         
         matching_pokemon = matching_pokemon[:10]  # Limit to 10 results
+        
+        # Track search if we found results
+        if matching_pokemon:
+            analytics.track_search(sanitized_query)
+        
         return jsonify(matching_pokemon)
 
     except Exception as e:
@@ -706,6 +714,20 @@ def api_battle():
             settings=battle_settings
         )
         
+        # Track unique battle (full team vs opponent, including moves and league)
+        team_ids = data.get('team_ids') or [p1_id]  # Try to get full team from frontend, fallback to just p1_id
+        team_moves = data.get('team_moves') or {p1_id: p1_moves}  # Dict of {id: moves}
+        opponent_moves = p2_moves
+        # If team_ids not provided, try to infer from context (for now, just use p1_id)
+        analytics.track_unique_battle(
+            team=team_ids,
+            team_moves=team_moves,
+            opponent=p2_id,
+            opponent_moves=opponent_moves,
+            league=f"CP{cp_cap}" if cp_cap > 0 else "Master League",
+            ip=request.remote_addr
+        )
+        
         # Add Pokémon names, CP cap, and shield AI strategies to result for frontend
         result['p1_name'] = p1['speciesName']
         result['p2_name'] = p2['speciesName']
@@ -929,6 +951,118 @@ def change_league(cp_cap):
     except Exception as e:
         print(f"Error changing league to CP {cp_cap}: {e}")
         return jsonify({'error': 'Internal server error'}), 500
+
+@app.route('/api/analytics')
+def get_analytics():
+    """Get analytics statistics (admin only)"""
+    try:
+        # For now, allow access to analytics (you can add authentication later)
+        stats = analytics.get_stats()
+        return jsonify(stats)
+    except Exception as e:
+        return jsonify({'error': f'Failed to get analytics: {str(e)}'}), 500
+
+ANALYTICS_PASSWORD = os.environ.get("ANALYTICS_PASSWORD", "changeme")
+
+@app.route('/analytics', methods=['GET', 'POST'])
+def analytics_dashboard():
+    error = None
+    if session.get('analytics_auth'):
+        return render_template('analytics.html')
+    if request.method == 'POST':
+        if request.form.get('password') == ANALYTICS_PASSWORD:
+            session['analytics_auth'] = True
+            return redirect(url_for('analytics_dashboard'))
+        else:
+            error = 'Wrong password!'
+    return render_template_string('''
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analytics Login</title>
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+    <style>
+        body {
+            background: #f4f6fa;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0;
+        }
+        .modal {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(44,62,80,0.15);
+            padding: 2.5rem 2rem 2rem 2rem;
+            max-width: 350px;
+            width: 100%;
+            text-align: center;
+            position: relative;
+        }
+        .modal h2 {
+            margin-top: 0;
+            color: #2c3e50;
+            font-size: 1.5rem;
+            margin-bottom: 1.2rem;
+        }
+        .modal form {
+            display: flex;
+            flex-direction: column;
+            gap: 1.2rem;
+        }
+        .modal input[type="password"] {
+            padding: 0.7rem 1rem;
+            border-radius: 8px;
+            border: 1px solid #d1d5db;
+            font-size: 1rem;
+            outline: none;
+            transition: border 0.2s;
+        }
+        .modal input[type="password"]:focus {
+            border: 1.5px solid #3498db;
+        }
+        .modal button {
+            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 0.7rem 1rem;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .modal button:hover {
+            background: linear-gradient(135deg, #2980b9 0%, #3498db 100%);
+        }
+        .error {
+            color: #e74c3c;
+            margin-bottom: 0.5rem;
+            font-size: 1rem;
+        }
+        .modal .lock {
+            font-size: 2.5rem;
+            color: #3498db;
+            margin-bottom: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="modal">
+        <div class="lock">🔒</div>
+        <h2>Analytics Login</h2>
+        {% if error %}<div class="error">{{ error }}</div>{% endif %}
+        <form method="post">
+            <input type="password" name="password" placeholder="Enter password" autofocus required>
+            <button type="submit">Unlock</button>
+        </form>
+    </div>
+</body>
+</html>
+''', error=error)
 
 # Security: Add security headers
 @app.after_request

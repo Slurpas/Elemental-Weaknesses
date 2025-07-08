@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analytics Dashboard - Pokemon PvP Helper</title>
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <style>
+        .analytics-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .analytics-header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        
+        .analytics-header h1 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+        
+        .stat-card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            border-left: 4px solid #3498db;
+        }
+        
+        .stat-card h3 {
+            color: #2c3e50;
+            margin-bottom: 16px;
+            font-size: 1.2rem;
+        }
+        
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: #3498db;
+            margin-bottom: 8px;
+        }
+        
+        .stat-label {
+            color: #7f8c8d;
+            font-size: 0.9rem;
+        }
+        
+        .chart-container {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+        
+        .chart-title {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            font-size: 1.3rem;
+        }
+        
+        .top-list {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .top-list li {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid #ecf0f1;
+        }
+        
+        .top-list li:last-child {
+            border-bottom: none;
+        }
+        
+        .pokemon-name {
+            font-weight: 500;
+            color: #2c3e50;
+        }
+        
+        .count {
+            background: #3498db;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+        
+        .usage-chart {
+            display: flex;
+            align-items: end;
+            height: 200px;
+            gap: 4px;
+            margin-top: 20px;
+        }
+        
+        .usage-bar {
+            flex: 1;
+            background: linear-gradient(to top, #3498db, #2980b9);
+            border-radius: 4px 4px 0 0;
+            min-height: 20px;
+            position: relative;
+        }
+        
+        .usage-label {
+            position: absolute;
+            bottom: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.8rem;
+            color: #7f8c8d;
+        }
+        
+        .back-link {
+            display: inline-block;
+            margin-bottom: 20px;
+            color: #3498db;
+            text-decoration: none;
+            font-weight: 500;
+        }
+        
+        .back-link:hover {
+            text-decoration: underline;
+        }
+        
+        .refresh-btn {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            margin-left: 10px;
+        }
+        
+        .refresh-btn:hover {
+            background: #2980b9;
+        }
+        
+        .loading {
+            text-align: center;
+            color: #7f8c8d;
+            font-style: italic;
+        }
+        
+        .error {
+            color: #e74c3c;
+            text-align: center;
+            padding: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="analytics-container">
+        <a href="/" class="back-link">← Back to PvP Helper</a>
+        
+        <div class="analytics-header">
+            <h1>📊 Analytics Dashboard</h1>
+            <p>Fun statistics about Pokemon PvP Helper usage</p>
+            <button class="refresh-btn" onclick="loadAnalytics()">🔄 Refresh</button>
+        </div>
+        
+        <div id="loading" class="loading">Loading analytics...</div>
+        <div id="error" class="error" style="display: none;"></div>
+        
+        <div id="analytics-content" style="display: none;">
+            <!-- Overview Stats -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h3>👥 Total Visitors</h3>
+                    <div class="stat-number" id="total-visitors">0</div>
+                    <div class="stat-label">Unique IP addresses</div>
+                </div>
+                
+                <div class="stat-card">
+                    <h3>👀 Recent Visitors</h3>
+                    <div class="stat-number" id="recent-visitors">0</div>
+                    <div class="stat-label">Last 30 days</div>
+                </div>
+                
+                <div class="stat-card">
+                    <h3>📄 Page Views</h3>
+                    <div class="stat-number" id="page-views">0</div>
+                    <div class="stat-label">Total page loads</div>
+                </div>
+                
+                <div class="stat-card">
+                    <h3>⚔️ Battles Simulated</h3>
+                    <div class="stat-number" id="total-battles">0</div>
+                    <div class="stat-label">Battle simulations run</div>
+                </div>
+            </div>
+            
+            <!-- Charts -->
+            <div class="chart-container">
+                <h3 class="chart-title">🔥 Most Searched Pokemon</h3>
+                <ul class="top-list" id="top-searches">
+                    <!-- Will be populated by JavaScript -->
+                </ul>
+            </div>
+            
+            <div class="chart-container">
+                <h3 class="chart-title">🏆 Popular Leagues</h3>
+                <ul class="top-list" id="top-leagues">
+                    <!-- Will be populated by JavaScript -->
+                </ul>
+            </div>
+            
+            <div class="chart-container">
+                <h3 class="chart-title">📈 Daily Usage (Last 7 Days)</h3>
+                <div class="usage-chart" id="daily-usage">
+                    <!-- Will be populated by JavaScript -->
+                </div>
+            </div>
+            
+            <div class="chart-container">
+                <h3 class="chart-title">⏰ Peak Usage Hour</h3>
+                <div class="stat-number" id="peak-hour">00:00</div>
+                <div class="stat-label">Hour with most activity</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function loadAnalytics() {
+            const loading = document.getElementById('loading');
+            const error = document.getElementById('error');
+            const content = document.getElementById('analytics-content');
+            
+            loading.style.display = 'block';
+            error.style.display = 'none';
+            content.style.display = 'none';
+            
+            fetch('/api/analytics')
+                .then(response => response.json())
+                .then(data => {
+                    loading.style.display = 'none';
+                    displayAnalytics(data);
+                })
+                .catch(err => {
+                    loading.style.display = 'none';
+                    error.style.display = 'block';
+                    error.textContent = 'Failed to load analytics: ' + err.message;
+                });
+        }
+        
+        function displayAnalytics(data) {
+            // Update overview stats
+            document.getElementById('total-visitors').textContent = data.total_visitors.toLocaleString();
+            document.getElementById('recent-visitors').textContent = data.recent_visitors.toLocaleString();
+            document.getElementById('page-views').textContent = data.total_page_views.toLocaleString();
+            document.getElementById('total-battles').textContent = data.total_battles.toLocaleString();
+            
+            // Update peak hour
+            const peakHour = data.peak_hour[0];
+            const peakCount = data.peak_hour[1];
+            document.getElementById('peak-hour').textContent = `${peakHour}:00 (${peakCount} visits)`;
+            
+            // Update top searches
+            const searchesList = document.getElementById('top-searches');
+            searchesList.innerHTML = '';
+            data.top_searches.forEach(([pokemon, count]) => {
+                const li = document.createElement('li');
+                li.innerHTML = `
+                    <span class="pokemon-name">${pokemon}</span>
+                    <span class="count">${count}</span>
+                `;
+                searchesList.appendChild(li);
+            });
+            
+            // Update top leagues
+            const leaguesList = document.getElementById('top-leagues');
+            leaguesList.innerHTML = '';
+            data.top_leagues.forEach(([league, count]) => {
+                const li = document.createElement('li');
+                li.innerHTML = `
+                    <span class="pokemon-name">${league}</span>
+                    <span class="count">${count}</span>
+                `;
+                leaguesList.appendChild(li);
+            });
+            
+            // Update daily usage chart
+            const dailyChart = document.getElementById('daily-usage');
+            dailyChart.innerHTML = '';
+            
+            const maxUsage = Math.max(...Object.values(data.recent_daily));
+            const sortedDays = Object.entries(data.recent_daily).sort();
+            
+            sortedDays.forEach(([date, count]) => {
+                const height = maxUsage > 0 ? (count / maxUsage) * 180 : 20;
+                const dayName = new Date(date).toLocaleDateString('en-US', { weekday: 'short' });
+                
+                const bar = document.createElement('div');
+                bar.className = 'usage-bar';
+                bar.style.height = `${height}px`;
+                bar.innerHTML = `<div class="usage-label">${dayName}</div>`;
+                dailyChart.appendChild(bar);
+            });
+            
+            document.getElementById('analytics-content').style.display = 'block';
+        }
+        
+        // Load analytics on page load
+        document.addEventListener('DOMContentLoaded', loadAnalytics);
+    </script>
+</body>
+</html> 

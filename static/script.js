@@ -2092,6 +2092,30 @@ async function runSingleBattle(teamPokemon, teamMoves, opponentPokemon, opponent
 
     console.log('Using IDs:', { teamId, opponentId });
 
+    // Build full team and moves for analytics (send in every request)
+    // userTeam is the current team array
+    const team_ids = userTeam.map(p => p.speciesId || p.name);
+    // Build team_moves as {speciesId: {fast, charged1, charged2}}
+    const team_moves = {};
+    userTeam.forEach(p => {
+        // Find selected moves for this team member
+        let fastMove = null;
+        let charged1 = null;
+        let charged2 = null;
+        if (p.pvp_moves && p.pvp_moves.length > 0) {
+            const fast = p.pvp_moves.find(m => m.move_class === 'fast');
+            const charged = p.pvp_moves.filter(m => m.move_class === 'charged');
+            fastMove = fast ? fast.name.toUpperCase().replace(' ', '_') : null;
+            charged1 = charged[0] ? charged[0].name.toUpperCase().replace(' ', '_') : null;
+            charged2 = charged[1] ? charged[1].name.toUpperCase().replace(' ', '_') : null;
+        }
+        team_moves[p.speciesId || p.name] = {
+            fast: fastMove,
+            charged1: charged1,
+            charged2: charged2
+        };
+    });
+
     const battleData = {
         p1_id: teamId,
         p2_id: opponentId,
@@ -2109,7 +2133,10 @@ async function runSingleBattle(teamPokemon, teamMoves, opponentPokemon, opponent
         p2_shields: shieldCount,
         p1_shield_ai: p1ShieldAI || 'smart_30',
         p2_shield_ai: p2ShieldAI || 'smart_30',
-        cp_cap: battleSimulationState.cpCap
+        cp_cap: battleSimulationState.cpCap,
+        // --- ADDED: full team info for analytics ---
+        team_ids: team_ids,
+        team_moves: team_moves
     };
 
     console.log('Battle data before cleanup:', battleData);

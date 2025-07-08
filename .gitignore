@@ -145,4 +145,7 @@ dmypy.json
 cython_debug/
 
 # Local development
-local_settings.py 
+local_settings.py
+
+# Analytics data
+analytics_data.json 
