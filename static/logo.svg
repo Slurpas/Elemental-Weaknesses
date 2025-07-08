@@ -1,0 +1,47 @@
+<svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle -->
+  <circle cx="100" cy="100" r="95" fill="#2c3e50" stroke="#34495e" stroke-width="2"/>
+  
+  <!-- Inner circle for battle arena -->
+  <circle cx="100" cy="100" r="70" fill="#3498db" stroke="#2980b9" stroke-width="3"/>
+  
+  <!-- Battle lines radiating from center -->
+  <g stroke="#ecf0f1" stroke-width="2" opacity="0.8">
+    <line x1="100" y1="30" x2="100" y2="50"/>
+    <line x1="100" y1="150" x2="100" y2="170"/>
+    <line x1="30" y1="100" x2="50" y2="100"/>
+    <line x1="150" y1="100" x2="170" y2="100"/>
+    <line x1="45" y1="45" x2="60" y2="60"/>
+    <line x1="140" y1="140" x2="155" y2="155"/>
+    <line x1="45" y1="155" x2="60" y2="140"/>
+    <line x1="140" y1="60" x2="155" y2="45"/>
+  </g>
+  
+  <!-- Pokemon silhouettes (simplified) -->
+  <!-- Left Pokemon -->
+  <g transform="translate(60, 80)">
+    <circle cx="0" cy="0" r="8" fill="#e74c3c"/>
+    <circle cx="0" cy="-12" r="6" fill="#e74c3c"/>
+    <circle cx="-8" cy="-6" r="3" fill="#e74c3c"/>
+    <circle cx="8" cy="-6" r="3" fill="#e74c3c"/>
+  </g>
+  
+  <!-- Right Pokemon -->
+  <g transform="translate(140, 80)">
+    <circle cx="0" cy="0" r="8" fill="#27ae60"/>
+    <circle cx="0" cy="-12" r="6" fill="#27ae60"/>
+    <circle cx="-8" cy="-6" r="3" fill="#27ae60"/>
+    <circle cx="8" cy="-6" r="3" fill="#27ae60"/>
+  </g>
+  
+  <!-- Energy/charge indicators -->
+  <g fill="#f39c12">
+    <circle cx="70" cy="60" r="4" opacity="0.8"/>
+    <circle cx="130" cy="60" r="4" opacity="0.8"/>
+    <circle cx="70" cy="140" r="4" opacity="0.8"/>
+    <circle cx="130" cy="140" r="4" opacity="0.8"/>
+  </g>
+  
+  <!-- PvP text -->
+  <text x="100" y="185" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#ecf0f1">PvP HELPER</text>
+</svg> 
