@@ -820,12 +820,8 @@ function updateTeamSlot(slotNumber, pokemon, movesEffectiveness = null, isBestCo
     
     slot.classList.add('filled');
     
-    // Add or remove best counter class for bold border
-    if (isBestCounter) {
-        slot.classList.add('best-counter');
-    } else {
-        slot.classList.remove('best-counter');
-    }
+    // Remove best counter class - it will be set by updateTeamSlotBorders
+    slot.classList.remove('best-counter');
     
             // Generate moves HTML - use the actual moves that are currently selected
             // This ensures that when you change a move, it stays exactly as you selected it
@@ -846,7 +842,6 @@ function updateTeamSlot(slotNumber, pokemon, movesEffectiveness = null, isBestCo
         
         movesHTML = `
             <div class="team-moves-section">
-                <h4>Best PvP Moves</h4>
                 <div class="team-moves-list">
                     ${bestMoves.map(move => {
                         let effectivenessHTML = '';
@@ -1190,14 +1185,14 @@ function updateTeamSlot(slotNumber, pokemon, movesEffectiveness = null, isBestCo
         slot.innerHTML = `
             <div class="slot-content">
                 <div class="pokemon-in-slot">
-                    <div class="pokemon-left-section">
+                    <div class="pokemon-header-section">
                         <div class="pokemon-name">${pokemon.name}</div>
                         <img src="${pokemon.sprite}" alt="${pokemon.name}" onerror="console.error('Failed to load image:', this.src)" onload="console.log('Successfully loaded image:', this.src)">
                         <div class="pokemon-types">
                             ${pokemon.types.map(type => `<span class="type-badge type-${type}">${type}</span>`).join('')}
                         </div>
                     </div>
-                    <div class="pokemon-right-section">
+                    <div class="pokemon-moves-section">
                         ${movesHTML}
                         ${battleResultHTML}
                     </div>

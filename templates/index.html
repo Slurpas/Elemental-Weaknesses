@@ -23,9 +23,10 @@
             </div>
         </header>
 
-                <div class="main-content">
-            <!-- Left Column: Opponent Pokémon -->
-            <div class="left-panel">
+        <!-- Main Flex Layout for PvP Team Builder -->
+        <div class="main-flex-container">
+            <!-- Opponent Panel -->
+            <div class="panel opponent-panel">
                 <div class="search-section">
                     <div class="search-container">
                         <input type="text" id="pokemonSearch" placeholder="Enter Pokemon name..." autocomplete="off">
@@ -56,45 +57,19 @@
                 </div>
 
                 <div class="moves-container">
-                    <h3>PvP Moves</h3>
                     <div id="movesList" class="moves-list"></div>
                 </div>
-
-                <div class="effectiveness-grid">
-                    <div class="effectiveness-category">
-                        <h3>Weaknesses</h3>
-                        <div id="weaknessesList" class="type-list"></div>
-                    </div>
-                    <div class="effectiveness-category">
-                        <h3>Resistances</h3>
-                        <div id="resistancesList" class="type-list"></div>
-                    </div>
-                    <div class="effectiveness-category">
-                        <h3>Double Resistances</h3>
-                        <div id="immunitiesList" class="type-list"></div>
-                    </div>
-                </div>
             </div>
-
-            <!-- Middle Column: Your Team -->
-            <div class="middle-panel">
+            <!-- Team Panel -->
+            <div class="panel team-panel">
                 <div class="team-section">
                     <h3>Your Team</h3>
                     
-                    <!-- Shield Selector -->
-                    <div class="shield-selector-top">
-                        <label>Shields for Battle Simulations:</label>
-                        <div class="shield-slider-container">
-                            <input type="range" id="shieldSlider" min="0" max="2" value="2" class="shield-slider">
-                            <span id="shieldValue">2</span>
-                        </div>
-                    </div>
-                    
-                    <!-- League Selection -->
-                    <div class="league-selector">
-                        <h4>League Selection</h4>
-                        <div class="league-selector-container">
-                            <label for="leagueSelect">Battle League:</label>
+                    <!-- Battle Settings Row -->
+                    <div class="battle-settings-row">
+                        <!-- League Selection -->
+                        <div class="league-selector-compact">
+                            <label for="leagueSelect">League:</label>
                             <select id="leagueSelect" class="league-dropdown">
                                 <option value="500">Little Cup (500 CP)</option>
                                 <option value="1500" selected>Great League (1500 CP)</option>
@@ -102,13 +77,10 @@
                                 <option value="0">Master League (No CP Cap)</option>
                             </select>
                         </div>
-                    </div>
-                    
-                    <!-- Shield AI Strategy Selector -->
-                    <div class="shield-ai-selector">
-                        <h4>Shield AI Strategy</h4>
-                        <div class="strategy-selector">
-                            <label for="shieldAI">Strategy for Both Players:</label>
+                        
+                        <!-- Shield AI Strategy Selector -->
+                        <div class="strategy-selector-compact">
+                            <label for="shieldAI">Strategy:</label>
                             <select id="shieldAI" class="strategy-dropdown">
                                 <option value="smart_30">Smart (30% damage)</option>
                                 <option value="smart_20">Aggressive (20% damage)</option>
@@ -119,6 +91,15 @@
                                 <option value="always">Always Shield</option>
                                 <option value="never">Never Shield</option>
                             </select>
+                        </div>
+                        
+                        <!-- Shield Selector -->
+                        <div class="shield-selector-compact">
+                            <label>Shields:</label>
+                            <div class="shield-slider-container">
+                                <input type="range" id="shieldSlider" min="0" max="2" value="2" class="shield-slider">
+                                <span id="shieldValue">2</span>
+                            </div>
                         </div>
                     </div>
                     
@@ -150,9 +131,8 @@
                     </div>
                 </div>
             </div>
-
-            <!-- Right Column: Team Analysis -->
-            <div class="right-panel">
+            <!-- Analysis Panel -->
+            <div class="panel analysis-panel">
                 <div class="team-analysis" id="teamAnalysis">
                     <h3>Team Analysis</h3>
                     <div class="analysis-content">
@@ -182,11 +162,7 @@
                             <div id="missingCoverage" class="missing-coverage-list"></div>
                         </div>
                         
-                        <!-- Battle Simulations Section -->
-                        <div class="battle-simulations-section">
-                            <h4>Battle Simulations</h4>
-                            <div id="battleSimulations" class="battle-simulations-list"></div>
-                        </div>
+
                     </div>
                 </div>
             </div>
