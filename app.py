@@ -11,6 +11,10 @@ import os
 from poke_data import PokeData
 from battle_sim import BattleSimulator
 from analytics import analytics
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 app = Flask(__name__)
 
@@ -185,11 +189,6 @@ def get_pokemon(name):
         sanitized_name = sanitize_pokemon_name(name)
         print(f"DEBUG: Looking for Pokemon: {sanitized_name}")
         
-        # Check cache first (but skip for now to ensure fresh data)
-        # cached_data = get_cached_pokemon(sanitized_name.lower())
-        # if cached_data:
-        #     return jsonify(cached_data)
-
         # Try to match by speciesId first, then by name
         p = poke_data.get_by_species_id(sanitized_name)
         if not p:
@@ -201,16 +200,21 @@ def get_pokemon(name):
         
         print(f"DEBUG: Found Pokemon: {p.get('speciesName', 'Unknown')} (ID: {p.get('speciesId', 'Unknown')})")
 
-        # Get types
+        # Defensive: Get types
         types = [t for t in p.get('types', []) if t and t != 'none']
+        if not types:
+            print(f"[WARN] Missing types for {p.get('speciesId')}")
 
-        # Get type effectiveness using static chart
-        effectiveness = get_fallback_effectiveness(types)
+        # Defensive: Get type effectiveness using static chart
+        try:
+            effectiveness = get_fallback_effectiveness(types)
+        except Exception as e:
+            print(f"[WARN] Error in get_fallback_effectiveness for {p.get('speciesId')}: {e}")
+            effectiveness = {}
 
-        # Get moves (fast and charged)
+        # Defensive: Get moves (fast and charged)
         moves = []
         for move_id in p.get('fastMoves', []) + p.get('chargedMoves', []):
-            # Try to infer move type from move_id (e.g., "FIRE_BLAST" -> "fire")
             move_type = None
             for t in poke_data.get_all_types():
                 if t in move_id.lower():
@@ -222,43 +226,49 @@ def get_pokemon(name):
                 'move_class': 'fast' if move_id in p.get('fastMoves', []) else 'charged'
             })
 
-        # Get PvP moves using poke_data
-        pvp_moves_data = poke_data.get_pokemon_moves(p.get('speciesId', sanitized_name))
+        # Defensive: Get PvP moves using poke_data
+        try:
+            pvp_moves_data = poke_data.get_pokemon_moves(p.get('speciesId', sanitized_name)) or {}
+        except Exception as e:
+            print(f"[WARN] Error in get_pokemon_moves for {p.get('speciesId')}: {e}")
+            pvp_moves_data = {}
         pvp_moves = []
-        
-        # Convert to the expected format
         for move in pvp_moves_data.get('fast_moves', []) + pvp_moves_data.get('charged_moves', []):
             pvp_moves.append({
-                'name': move['name'],
-                'type': move['type'],
+                'name': move.get('name', 'Unknown'),
+                'type': move.get('type', ''),
                 'move_class': move.get('move_class', 'fast' if move in pvp_moves_data.get('fast_moves', []) else 'charged'),
-                'dpe': None,  # Will be calculated below
+                'dpe': None,
                 'power': move.get('power', 0),
                 'energy': move.get('energy', 0)
             })
-        
         for move in pvp_moves:
             if move['type']:
-                mult, label = get_move_effectiveness(move['type'], types)
-                move['effectiveness'] = {'multiplier': mult, 'label': label}
+                try:
+                    mult, label = get_move_effectiveness(move['type'], types)
+                    move['effectiveness'] = {'multiplier': mult, 'label': label}
+                except Exception as e:
+                    print(f"[WARN] Error in get_move_effectiveness for {p.get('speciesId')} move {move['name']}: {e}")
+                    move['effectiveness'] = {'multiplier': 1.0, 'label': 'Neutral'}
             else:
                 move['effectiveness'] = {'multiplier': 1.0, 'label': 'Neutral'}
 
-        # Local sprite path
-        sprite_url = f"/static/sprites/{p.get('speciesId')}.png"
+        # Defensive: Local sprite path
+        sprite_url = f"/static/sprites/{p.get('speciesId', 'unknown')}.png"
 
-        # Get PvPoke rankings data for this Pokémon
+        # Defensive: Get PvPoke rankings data for this Pokémon
         species_id = p.get('speciesId', '').lower()
         pvpoke_data = pvp_rankings_by_species.get(species_id, {})
-        print(f"[DEBUG] Looking up PvPoke data for {species_id}: {pvpoke_data.get('moveset', 'Not found')}")
+        if not pvpoke_data:
+            print(f"[WARN] No PvPoke data for {species_id}")
         
-        # Format the response
+        # Defensive: Format the response
         formatted_data = {
-            'id': p.get('dex'),
-            'name': p.get('speciesName'),
-            'speciesId': p.get('speciesId'),
+            'id': p.get('dex', 0),
+            'name': p.get('speciesName', 'Unknown'),
+            'speciesId': p.get('speciesId', sanitized_name),
             'types': types,
-            'stats': p.get('baseStats', {}),
+            'stats': p.get('baseStats', {'atk': 0, 'def': 0, 'hp': 0}),
             'effectiveness': effectiveness,
             'moves': moves,
             'pvp_moves': pvp_moves,
@@ -269,13 +279,17 @@ def get_pokemon(name):
         }
 
         # Cache the data
-        cache_pokemon(sanitized_name.lower(), formatted_data)
+        try:
+            cache_pokemon(sanitized_name.lower(), formatted_data)
+        except Exception as e:
+            print(f"[WARN] Error caching data for {sanitized_name}: {e}")
 
         return jsonify(formatted_data)
 
     except Exception as e:
         # Security: Don't expose internal error details in production
-        if app.config['DEBUG']:
+        print(f"[ERROR] Exception in get_pokemon: {e}")
+        if app.config.get('DEBUG', False):
             return jsonify({'error': str(e)}), 500
         else:
             return jsonify({'error': 'Internal server error'}), 500

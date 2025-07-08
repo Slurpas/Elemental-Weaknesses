@@ -31,9 +31,25 @@ source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 # Install dependencies
 pip install -r requirements.txt
 
+# Set up environment variables (see ENVIRONMENT.md for details)
+# Create a .env file in the project root:
+SECRET_KEY=dev-secret-key-change-in-production
+FLASK_ENV=development
+FLASK_DEBUG=True
+ANALYTICS_PASSWORD=dev-analytics-password
+
 # Run the application
 python app.py
 ```
+
+### Environment Variables
+For detailed environment variable setup, see [ENVIRONMENT.md](ENVIRONMENT.md).
+
+**Required for development:**
+- `SECRET_KEY`: Any string for development
+- `FLASK_ENV`: `development`
+- `FLASK_DEBUG`: `True`
+- `ANALYTICS_PASSWORD`: Any password for development
 
 ## 🛠️ Development Guidelines
 
@@ -48,12 +64,14 @@ python app.py
 - Never expose sensitive information in error messages
 - Follow the security guidelines in `SECURITY.md`
 - Test for common vulnerabilities (XSS, CSRF, etc.)
+- **Never commit sensitive data** (use environment variables)
 
 ### Testing
 - Test your changes thoroughly
 - Include unit tests for new functionality
 - Test edge cases and error conditions
 - Ensure the application works on different browsers
+- Run the Pokemon API coverage test: `python test/test_pokemon_api_coverage.py`
 
 ## 🐛 Bug Reports
 
@@ -64,6 +82,7 @@ When reporting bugs, please include:
 3. **Expected behavior** vs actual behavior
 4. **Environment details** (OS, browser, Python version)
 5. **Screenshots** if applicable
+6. **Environment variables** (if relevant, without revealing actual values)
 
 ## 💡 Feature Requests
 
@@ -73,6 +92,7 @@ When suggesting features:
 2. **Explain** why it would be useful
 3. **Provide** examples of how it would work
 4. **Consider** the impact on existing functionality
+5. **Consider** privacy and security implications
 
 ## 🔧 Pull Request Process
 
@@ -98,12 +118,15 @@ Brief description of changes
 - [ ] Tested locally
 - [ ] Added unit tests
 - [ ] Tested on multiple browsers
+- [ ] Verified environment variables work correctly
 
 ## Checklist
 - [ ] Code follows style guidelines
 - [ ] Security considerations addressed
 - [ ] Documentation updated
 - [ ] No breaking changes
+- [ ] No sensitive data committed
+- [ ] Environment variables documented if needed
 ```
 
 ## 🔒 Security
@@ -117,11 +140,19 @@ Brief description of changes
 4. Coordinate disclosure timeline
 
 ### Security Guidelines
-- Never commit sensitive data (API keys, passwords)
+- **Never commit sensitive data** (API keys, passwords, secrets)
+- **Always use environment variables** for configuration
 - Always validate user input
 - Use parameterized queries
 - Follow the principle of least privilege
 - Keep dependencies updated
+- Test for common vulnerabilities
+
+### Privacy Considerations
+- Analytics data is stored locally and gitignored
+- No personal data is collected
+- IP addresses are hashed for privacy
+- Consider privacy implications of new features
 
 ## 📚 Resources
 
@@ -129,6 +160,9 @@ Brief description of changes
 - [Python Security Best Practices](https://python-security.readthedocs.io/)
 - [OWASP Top 10](https://owasp.org/www-project-top-ten/)
 - [PEP 8 Style Guide](https://www.python.org/dev/peps/pep-0008/)
+- [Environment Variables Guide](ENVIRONMENT.md)
+- [Security Documentation](SECURITY.md)
+- [Deployment Guide](DEPLOYMENT.md)
 
 ## 🤝 Code of Conduct
 

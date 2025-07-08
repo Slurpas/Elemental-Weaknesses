@@ -31,15 +31,32 @@ A web application to quickly look up Pokemon weaknesses, resistances, and moves 
    pip install -r requirements.txt
    ```
 
-3. **Run the application**:
+3. **Configure environment variables** (see [ENVIRONMENT.md](ENVIRONMENT.md)):
+   ```bash
+   # Create a .env file in the project root
+   SECRET_KEY=your-secret-key-here
+   FLASK_ENV=development
+   FLASK_DEBUG=True
+   ANALYTICS_PASSWORD=your-analytics-password
+   ```
+
+4. **Run the application**:
    ```bash
    python app.py
    ```
 
-4. **Open your browser** and go to:
+5. **Open your browser** and go to:
    ```
    http://localhost:5000
    ```
+
+### Production Deployment
+
+For production deployment, see [DEPLOYMENT.md](DEPLOYMENT.md) for detailed instructions on:
+- Free hosting options (Render, Railway, PythonAnywhere)
+- Environment variable configuration
+- Security best practices
+- Troubleshooting guide
 
 ## Usage
 
@@ -92,11 +109,29 @@ You can easily customize the app by:
 - Updating `static/script.js` to add new features
 - Editing `app.py` to modify the backend logic
 
+## Testing
+
+### Run Comprehensive Tests
+```bash
+# Make sure your app is running first
+python app.py
+
+# In another terminal, run the test suite
+python test/test_app_comprehensive.py
+```
+
+### Test Pokemon API Coverage
+```bash
+# Test that all 1,648 Pokemon are accessible
+python test/test_pokemon_api_coverage.py
+```
+
 ## Troubleshooting
 
 - **Port already in use**: Change the port in `app.py` (line with `app.run()`)
 - **API errors**: The app uses the free PokeAPI, which may have rate limits
 - **Slow loading**: The app caches data, so subsequent searches will be faster
+- **Environment variables**: See [ENVIRONMENT.md](ENVIRONMENT.md) for setup help
 
 ## Security
 
