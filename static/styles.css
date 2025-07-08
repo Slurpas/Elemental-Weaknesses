@@ -2292,6 +2292,37 @@ h3, h4 {
   font-weight: 600;
 }
 
+/* Footer */
+.app-footer {
+  background: #f8f9fa;
+  border-top: 1px solid #e9ecef;
+  padding: 1rem 0;
+  margin-top: 2rem;
+  text-align: center;
+}
+
+.footer-content {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+.footer-content p {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #6c757d;
+}
+
+.footer-content a {
+  color: #4CAF50;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.footer-content a:hover {
+  text-decoration: underline;
+}
+
 /* Ensure no default margins cause empty space */
 html, body {
   margin: 0;

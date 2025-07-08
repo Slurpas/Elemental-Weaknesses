@@ -49,7 +49,15 @@ A web application to quickly look up Pokemon weaknesses, resistances, and moves 
 - **Backend**: Python Flask web framework
 - **Frontend**: HTML5, CSS3, Vanilla JavaScript
 - **Data Source**: PokeAPI (free Pokemon database)
+- **Battle Simulation Engine**: Based on PvPoke's battle algorithm and data
 - **Caching**: Built-in caching to reduce API calls and improve performance
+
+## Credits & Acknowledgments
+
+This project uses battle simulation data and algorithms based on [PvPoke](https://pvpoke.com/), the premier Pokemon Go PvP resource. Special thanks to the PvPoke team for their excellent work in the Pokemon Go PvP community.
+
+- **PvPoke**: Battle simulation engine and PvP rankings data
+- **PokeAPI**: Pokemon species and move data
 
 ## File Structure
 
