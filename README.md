@@ -92,6 +92,32 @@ You can easily customize the app by:
 - **API errors**: The app uses the free PokeAPI, which may have rate limits
 - **Slow loading**: The app caches data, so subsequent searches will be faster
 
+## Security
+
+This project takes security seriously. Please see [SECURITY.md](SECURITY.md) for detailed information about:
+
+- Security measures implemented
+- Known vulnerabilities
+- Reporting security issues
+- Security best practices
+
+## Contributing
+
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on:
+
+- How to contribute
+- Code style guidelines
+- Testing requirements
+- Pull request process
+
+## Code of Conduct
+
+This project adheres to a Code of Conduct. Please see [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for details.
+
 ## License
 
-This project is open source and available under the MIT License. 
+This project is open source and available under the [MIT License](LICENSE).
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for a complete history of changes and releases. 
