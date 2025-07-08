@@ -32,7 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.0.0] - 2024-01-XX
 
 ### Added
-- Initial release of Pokemon PvP Analyzer
+- Initial release of Pokemon PvP Helper
 - Pokemon search functionality
 - Type effectiveness calculations
 - Move information display

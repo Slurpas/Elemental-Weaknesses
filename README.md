@@ -1,4 +1,4 @@
-# Pokemon PvP Analyzer
+# Pokemon PvP Helper
 
 A web application to quickly look up Pokemon weaknesses, resistances, and moves for PvP battles in Pokemon Go.
 
@@ -62,7 +62,7 @@ This project uses battle simulation data and algorithms based on [PvPoke](https:
 ## File Structure
 
 ```
-Pokemon PvP Analyzer/
+Pokemon PvP Helper/
 ├── app.py                 # Main Flask application
 ├── requirements.txt       # Python dependencies
 ├── README.md             # This file

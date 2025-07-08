@@ -1,5 +1,5 @@
 """
-Security configuration for Pokemon PvP Analyzer
+Security configuration for Pokemon PvP Helper
 """
 
 import os

@@ -942,7 +942,7 @@ def add_security_headers(response):
     return response
 
 if __name__ == '__main__':
-    print("Starting Pokemon PvP Analyzer...")
+    print("Starting Pokemon PvP Helper...")
     print("Open your browser and go to: http://localhost:5000")
     # Security: Use environment variable for debug mode
     debug_mode = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'

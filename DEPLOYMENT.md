@@ -1,4 +1,4 @@
-# Deployment Guide
+# Deployment Guide for Pokemon PvP Helper
 
 ## Free Hosting Options
 
@@ -9,7 +9,7 @@
 2. Click "New +" → "Web Service"
 3. Connect your GitHub repository
 4. Configure:
-   - **Name**: `pokemon-pvp-analyzer` (or any name)
+   - **Name**: `pokemon-pvp-helper` (or any name)
    - **Environment**: `Python 3`
    - **Build Command**: `pip install -r requirements.txt`
    - **Start Command**: `gunicorn app:app`

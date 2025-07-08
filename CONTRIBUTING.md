@@ -1,6 +1,6 @@
-# Contributing to Pokemon PvP Analyzer
+# Contributing to Pokemon PvP Helper
 
-Thank you for your interest in contributing to Pokemon PvP Analyzer! This document provides guidelines and information for contributors.
+Thank you for your interest in contributing to Pokemon PvP Helper! This document provides guidelines and information for contributors.
 
 ## 🚀 Quick Start
 
@@ -21,8 +21,8 @@ Thank you for your interest in contributing to Pokemon PvP Analyzer! This docume
 ### Local Development
 ```bash
 # Clone your fork
-git clone https://github.com/YOUR_USERNAME/pokemon-pvp-analyzer.git
-cd pokemon-pvp-analyzer
+git clone https://github.com/YOUR_USERNAME/pokemon-pvp-helper.git
+cd pokemon-pvp-helper
 
 # Create virtual environment
 python -m venv .venv
@@ -143,4 +143,4 @@ By contributing, you agree that your contributions will be licensed under the MI
 
 ---
 
-Thank you for contributing to Pokemon PvP Analyzer! 🎉 
+Thank you for contributing to Pokemon PvP Helper! 🎉 

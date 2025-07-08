@@ -1,4 +1,4 @@
-# Pokemon PvP Analyzer - Development TODO
+# Pokemon PvP Helper - Development TODO
 
 ## ✅ COMPLETED
 
@@ -83,7 +83,7 @@ All major features have been successfully implemented and tested:
 - Error handling implemented
 
 ### 🚀 **Production Ready:**
-The Pokemon PvP Analyzer is now fully functional with all requested features implemented and tested. Users can:
+The Pokemon PvP Helper is now fully functional with all requested features implemented and tested. Users can:
 - Switch between different CP caps (Little Cup, Great League, Ultra League)
 - Select different shield AI strategies for realistic battle simulation
 - Get accurate battle results based on PvPoke data
