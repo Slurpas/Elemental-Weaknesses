@@ -1,0 +1,18 @@
+User-agent: *
+Allow: /
+
+# Sitemap
+Sitemap: https://your-domain.com/sitemap.xml
+
+# Disallow analytics and admin pages
+Disallow: /analytics
+Disallow: /api/analytics
+
+# Allow API endpoints for Pokemon data
+Allow: /api/pokemon/
+Allow: /api/search/
+Allow: /api/battle/
+Allow: /api/matchup/
+
+# Crawl delay (optional)
+Crawl-delay: 1 

@@ -3,10 +3,85 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pokemon PvP Helper</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    
+    <!-- Primary Meta Tags -->
+    <title>Pokemon Go PvP Helper - Free Team Builder & Battle Simulator</title>
+    <meta name="title" content="Pokemon Go PvP Helper - Free Team Builder & Battle Simulator">
+    <meta name="description" content="Free Pokemon Go PvP team builder and battle simulator. Build teams, check type effectiveness, simulate battles, and optimize your Great League, Ultra League, and Master League strategies.">
+    <meta name="keywords" content="pokemon go pvp, pokemon go battle league, pvp team builder, pokemon go great league, pokemon go ultra league, pokemon go master league, pokemon go battle simulator, pokemon go type effectiveness, pokemon go moves, pokemon go team optimization">
+    <meta name="author" content="Pokemon PvP Helper">
+    <meta name="robots" content="index, follow">
+    <meta name="language" content="English">
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://your-domain.com/">
+    <meta property="og:title" content="Pokemon Go PvP Helper - Free Team Builder & Battle Simulator">
+    <meta property="og:description" content="Free Pokemon Go PvP team builder and battle simulator. Build teams, check type effectiveness, simulate battles, and optimize your Great League, Ultra League, and Master League strategies.">
+    <meta property="og:image" content="https://your-domain.com/static/og-image.png">
+    <meta property="og:site_name" content="Pokemon PvP Helper">
+    
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="https://your-domain.com/">
+    <meta property="twitter:title" content="Pokemon Go PvP Helper - Free Team Builder & Battle Simulator">
+    <meta property="twitter:description" content="Free Pokemon Go PvP team builder and battle simulator. Build teams, check type effectiveness, simulate battles, and optimize your Great League, Ultra League, and Master League strategies.">
+    <meta property="twitter:image" content="https://your-domain.com/static/og-image.png">
+    
+    <!-- Additional SEO Meta Tags -->
+    <meta name="theme-color" content="#3498db">
+    <meta name="msapplication-TileColor" content="#3498db">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="PvP Helper">
+    
+    <!-- Canonical URL -->
+    <link rel="canonical" href="https://your-domain.com/">
+    
+    <!-- Favicon -->
     <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='favicon.svg') }}">
+    
+    <!-- Stylesheets -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Structured Data (JSON-LD) -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "Pokemon Go PvP Helper",
+        "description": "Free Pokemon Go PvP team builder and battle simulator for Great League, Ultra League, and Master League",
+        "url": "https://your-domain.com/",
+        "applicationCategory": "Game",
+        "operatingSystem": "Web Browser",
+        "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD"
+        },
+        "featureList": [
+            "Pokemon Go PvP Team Builder",
+            "Battle Simulator",
+            "Type Effectiveness Calculator",
+            "Move Optimization",
+            "Great League Support",
+            "Ultra League Support", 
+            "Master League Support",
+            "Shield Strategy Simulator"
+        ],
+        "screenshot": "https://your-domain.com/static/screenshot.png",
+        "author": {
+            "@type": "Person",
+            "name": "Pokemon PvP Helper"
+        }
+    }
+    </script>
+    
+    <!-- Preload critical resources -->
+    <link rel="preload" href="{{ url_for('static', filename='styles.css') }}" as="style">
+    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" as="style">
 </head>
 <body>
     <div class="container">
@@ -350,19 +425,59 @@
     <!-- Footer -->
     <footer class="app-footer">
         <div class="footer-content">
-            <div class="footer-left">
-                <p>&copy; 2024 Pokemon PvP Helper | Powered by <a href="https://pvpoke.com/" target="_blank" rel="noopener">PvPoke</a> battle data</p>
+            <div class="footer-main">
+                <div class="footer-section">
+                    <h4>Pokemon Go PvP Helper</h4>
+                    <p>Free Pokemon Go PvP team builder and battle simulator. Build teams, check type effectiveness, simulate battles, and optimize your Great League, Ultra League, and Master League strategies.</p>
+                </div>
+                
+                <div class="footer-section">
+                    <h4>Features</h4>
+                    <ul>
+                        <li><a href="#team-builder">Team Builder</a></li>
+                        <li><a href="#battle-simulator">Battle Simulator</a></li>
+                        <li><a href="#type-effectiveness">Type Effectiveness</a></li>
+                        <li><a href="#move-optimization">Move Optimization</a></li>
+                        <li><a href="#league-support">League Support</a></li>
+                    </ul>
+                </div>
+                
+                <div class="footer-section">
+                    <h4>Pokemon Go Leagues</h4>
+                    <ul>
+                        <li><a href="#great-league">Great League (1500 CP)</a></li>
+                        <li><a href="#ultra-league">Ultra League (2500 CP)</a></li>
+                        <li><a href="#master-league">Master League (No CP Cap)</a></li>
+                        <li><a href="#little-cup">Little Cup (500 CP)</a></li>
+                    </ul>
+                </div>
+                
+                <div class="footer-section">
+                    <h4>Resources</h4>
+                    <ul>
+                        <li><a href="https://pvpoke.com/" target="_blank" rel="noopener">PvPoke</a></li>
+                        <li><a href="https://thesilphroad.com/" target="_blank" rel="noopener">Silph Road</a></li>
+                        <li><a href="https://pokemongohub.net/" target="_blank" rel="noopener">Pokemon GO Hub</a></li>
+                        <li><a href="https://gamepress.gg/pokemongo/" target="_blank" rel="noopener">GamePress</a></li>
+                    </ul>
+                </div>
             </div>
-            <div class="footer-right">
-                <button class="footer-btn bug-report-btn" onclick="window.open('https://github.com/Slurpas/GoPvPilot/issues/new?template=bug_report.md', '_blank')" title="Report a bug">
-                    🐛 Report Bug
-                </button>
-                <button class="footer-btn feature-request-btn" onclick="window.open('https://github.com/Slurpas/GoPvPilot/issues/new?template=feature_request.md', '_blank')" title="Request a feature">
-                    💡 Request Feature
-                </button>
-                <button class="footer-btn analytics-btn" onclick="window.open('/analytics', '_blank')" title="View analytics">
-                    📊 Analytics
-                </button>
+            
+            <div class="footer-bottom">
+                <div class="footer-left">
+                    <p>&copy; 2024 Pokemon PvP Helper | Powered by <a href="https://pvpoke.com/" target="_blank" rel="noopener">PvPoke</a> battle data</p>
+                </div>
+                <div class="footer-right">
+                    <button class="footer-btn bug-report-btn" onclick="window.open('https://github.com/Slurpas/GoPvPilot/issues/new?template=bug_report.md', '_blank')" title="Report a bug">
+                        🐛 Report Bug
+                    </button>
+                    <button class="footer-btn feature-request-btn" onclick="window.open('https://github.com/Slurpas/GoPvPilot/issues/new?template=feature_request.md', '_blank')" title="Request a feature">
+                        💡 Request Feature
+                    </button>
+                    <button class="footer-btn analytics-btn" onclick="window.open('/analytics', '_blank')" title="View analytics">
+                        📊 Analytics
+                    </button>
+                </div>
             </div>
         </div>
     </footer>

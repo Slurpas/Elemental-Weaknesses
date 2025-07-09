@@ -977,6 +977,16 @@ def change_league(cp_cap):
         print(f"Error changing league to CP {cp_cap}: {e}")
         return jsonify({'error': 'Internal server error'}), 500
 
+@app.route('/sitemap.xml')
+def sitemap():
+    """Serve sitemap for SEO"""
+    return app.send_static_file('sitemap.xml')
+
+@app.route('/robots.txt')
+def robots():
+    """Serve robots.txt for SEO"""
+    return app.send_static_file('robots.txt')
+
 @app.route('/api/analytics')
 def get_analytics():
     """Get analytics statistics (admin only)"""
