@@ -32,9 +32,16 @@ class Analytics:
             "visitors": {},
             "page_views": 0,
             "searches": {},
+            "pokemon_views": {},  # Track actual Pokemon viewed (not search terms)
             "battles": 0,
             "leagues": {},
             "hourly_usage": defaultdict(int),
+            "hourly_stats": defaultdict(lambda: {
+                "visits": 0,
+                "pokemon_views": 0,
+                "battles": 0,
+                "unique_visitors": set()
+            }),
             "daily_usage": {},
             "start_date": datetime.now().isoformat(),
             "last_reset": datetime.now().isoformat()
@@ -44,14 +51,21 @@ class Analytics:
         """Save analytics data to file"""
         try:
             with self.lock:
+                # Convert sets to lists for JSON serialization
+                data_to_save = self.data.copy()
+                for hour, stats in data_to_save["hourly_stats"].items():
+                    if isinstance(stats, dict) and "unique_visitors" in stats:
+                        stats["unique_visitors"] = list(stats["unique_visitors"])
+                
                 with open(self.data_file, 'w') as f:
-                    json.dump(self.data, f, indent=2, default=str)
+                    json.dump(data_to_save, f, indent=2, default=str)
         except Exception as e:
             print(f"[ANALYTICS] Error saving data: {e}")
     
     def track_visit(self, ip_address, user_agent=""):
         """Track a unique visitor"""
         today = datetime.now().strftime("%Y-%m-%d")
+        hour = datetime.now().strftime("%H")
         
         with self.lock:
             # Track unique visitors by IP
@@ -71,8 +85,19 @@ class Analytics:
             self.data["daily_usage"][today] += 1
             
             # Track hourly usage
-            hour = datetime.now().strftime("%H")
             self.data["hourly_usage"][hour] += 1
+            
+            # Track detailed hourly statistics
+            if hour not in self.data["hourly_stats"]:
+                self.data["hourly_stats"][hour] = {
+                    "visits": 0,
+                    "pokemon_views": 0,
+                    "battles": 0,
+                    "unique_visitors": set()
+                }
+            
+            self.data["hourly_stats"][hour]["visits"] += 1
+            self.data["hourly_stats"][hour]["unique_visitors"].add(ip_address)
             
             # Increment page views
             self.data["page_views"] += 1
@@ -81,21 +106,55 @@ class Analytics:
         if self.data["page_views"] % 10 == 0:  # Save every 10 page views
             self.save_data()
     
-    def track_search(self, pokemon_name):
-        """Track Pokemon searches"""
+    def track_search(self, search_term):
+        """Track search terms (what users type)"""
         with self.lock:
-            if pokemon_name not in self.data["searches"]:
-                self.data["searches"][pokemon_name] = 0
-            self.data["searches"][pokemon_name] += 1
+            if search_term not in self.data["searches"]:
+                self.data["searches"][search_term] = 0
+            self.data["searches"][search_term] += 1
+    
+    def track_pokemon_view(self, pokemon_name):
+        """Track when a Pokemon is actually viewed (not just searched for)"""
+        hour = datetime.now().strftime("%H")
+        
+        with self.lock:
+            # Track Pokemon views
+            if pokemon_name not in self.data["pokemon_views"]:
+                self.data["pokemon_views"][pokemon_name] = 0
+            self.data["pokemon_views"][pokemon_name] += 1
+            
+            # Track in hourly stats
+            if hour not in self.data["hourly_stats"]:
+                self.data["hourly_stats"][hour] = {
+                    "visits": 0,
+                    "pokemon_views": 0,
+                    "battles": 0,
+                    "unique_visitors": set()
+                }
+            
+            self.data["hourly_stats"][hour]["pokemon_views"] += 1
     
     def track_battle(self, league):
         """Track battle simulations"""
+        hour = datetime.now().strftime("%H")
+        
         with self.lock:
             self.data["battles"] += 1
             
             if league not in self.data["leagues"]:
                 self.data["leagues"][league] = 0
             self.data["leagues"][league] += 1
+            
+            # Track in hourly stats
+            if hour not in self.data["hourly_stats"]:
+                self.data["hourly_stats"][hour] = {
+                    "visits": 0,
+                    "pokemon_views": 0,
+                    "battles": 0,
+                    "unique_visitors": set()
+                }
+            
+            self.data["hourly_stats"][hour]["battles"] += 1
     
     def track_unique_battle(self, team, team_moves, opponent, opponent_moves, league, ip=None, window_minutes=5):
         """
@@ -124,41 +183,115 @@ class Analytics:
     
     def get_stats(self):
         """Get current analytics statistics"""
-        with self.lock:
-            # Calculate unique visitors (IPs that visited in last 30 days)
-            thirty_days_ago = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
-            recent_visitors = sum(1 for visitor in self.data["visitors"].values() 
-                                if visitor["last_visit"] >= thirty_days_ago)
-            
-            # Get top searches
-            top_searches = sorted(self.data["searches"].items(), 
-                                key=lambda x: x[1], reverse=True)[:10]
-            
-            # Get top leagues
-            top_leagues = sorted(self.data["leagues"].items(), 
-                               key=lambda x: x[1], reverse=True)
-            
-            # Get peak usage hour
-            peak_hour = max(self.data["hourly_usage"].items(), 
-                          key=lambda x: x[1]) if self.data["hourly_usage"] else ("00", 0)
-            
-            # Get recent daily usage (last 7 days)
-            recent_daily = {}
-            for i in range(7):
-                date = (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d")
-                recent_daily[date] = self.data["daily_usage"].get(date, 0)
-            
+        try:
+            with self.lock:
+                # Ensure all required fields exist with defaults
+                if "visitors" not in self.data:
+                    self.data["visitors"] = {}
+                if "searches" not in self.data:
+                    self.data["searches"] = {}
+                if "pokemon_views" not in self.data:
+                    self.data["pokemon_views"] = {}
+                if "leagues" not in self.data:
+                    self.data["leagues"] = {}
+                if "hourly_usage" not in self.data:
+                    self.data["hourly_usage"] = defaultdict(int)
+                if "hourly_stats" not in self.data:
+                    self.data["hourly_stats"] = defaultdict(lambda: {
+                        "visits": 0,
+                        "pokemon_views": 0,
+                        "battles": 0,
+                        "unique_visitors": set()
+                    })
+                if "daily_usage" not in self.data:
+                    self.data["daily_usage"] = {}
+                if "page_views" not in self.data:
+                    self.data["page_views"] = 0
+                if "battles" not in self.data:
+                    self.data["battles"] = 0
+                if "start_date" not in self.data:
+                    self.data["start_date"] = datetime.now().isoformat()
+                
+                # Calculate unique visitors (IPs that visited in last 30 days)
+                thirty_days_ago = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+                recent_visitors = sum(1 for visitor in self.data["visitors"].values() 
+                                    if visitor.get("last_visit", "") >= thirty_days_ago)
+                
+                # Get top searches (what users type)
+                top_searches = sorted(self.data["searches"].items(), 
+                                    key=lambda x: x[1], reverse=True)[:10]
+                
+                # Get top Pokemon views (actual Pokemon viewed)
+                top_pokemon_views = sorted(self.data["pokemon_views"].items(), 
+                                         key=lambda x: x[1], reverse=True)[:10]
+                
+                # Get top leagues
+                top_leagues = sorted(self.data["leagues"].items(), 
+                                   key=lambda x: x[1], reverse=True)
+                
+                # Get peak usage hour
+                if self.data["hourly_usage"]:
+                    peak_hour = max(self.data["hourly_usage"].items(), 
+                                  key=lambda x: x[1])
+                else:
+                    peak_hour = ("00", 0)
+                
+                # Get recent daily usage (last 7 days)
+                recent_daily = {}
+                for i in range(7):
+                    date = (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d")
+                    recent_daily[date] = self.data["daily_usage"].get(date, 0)
+                
+                # Get hourly statistics for the last 24 hours
+                hourly_stats = {}
+                for i in range(24):
+                    hour = f"{(datetime.now() - timedelta(hours=i)).hour:02d}"
+                    if hour in self.data["hourly_stats"]:
+                        stats = self.data["hourly_stats"][hour]
+                        hourly_stats[hour] = {
+                            "visits": stats.get("visits", 0),
+                            "pokemon_views": stats.get("pokemon_views", 0),
+                            "battles": stats.get("battles", 0),
+                            "unique_visitors": len(stats.get("unique_visitors", set()))
+                        }
+                    else:
+                        hourly_stats[hour] = {
+                            "visits": 0,
+                            "pokemon_views": 0,
+                            "battles": 0,
+                            "unique_visitors": 0
+                        }
+                
+                return {
+                    "total_visitors": len(self.data["visitors"]),
+                    "recent_visitors": recent_visitors,
+                    "total_page_views": self.data["page_views"],
+                    "total_battles": self.data["battles"],
+                    "top_searches": top_searches,
+                    "top_pokemon_views": top_pokemon_views,  # New: actual Pokemon viewed
+                    "top_leagues": top_leagues,
+                    "peak_hour": peak_hour,
+                    "recent_daily": recent_daily,
+                    "hourly_stats": hourly_stats,  # New: detailed hourly breakdown
+                    "start_date": self.data["start_date"],
+                    "current_concurrent": len(self.data["visitors"])  # Rough estimate
+                }
+        except Exception as e:
+            print(f"[ANALYTICS] Error in get_stats: {e}")
+            # Return safe default values
             return {
-                "total_visitors": len(self.data["visitors"]),
-                "recent_visitors": recent_visitors,
-                "total_page_views": self.data["page_views"],
-                "total_battles": self.data["battles"],
-                "top_searches": top_searches,
-                "top_leagues": top_leagues,
-                "peak_hour": peak_hour,
-                "recent_daily": recent_daily,
-                "start_date": self.data["start_date"],
-                "current_concurrent": len(self.data["visitors"])  # Rough estimate
+                "total_visitors": 0,
+                "recent_visitors": 0,
+                "total_page_views": 0,
+                "total_battles": 0,
+                "top_searches": [],
+                "top_pokemon_views": [],
+                "top_leagues": [],
+                "peak_hour": ("00", 0),
+                "recent_daily": {},
+                "hourly_stats": {},
+                "start_date": datetime.now().isoformat(),
+                "current_concurrent": 0
             }
     
     def cleanup_old_data(self, days_to_keep=90):

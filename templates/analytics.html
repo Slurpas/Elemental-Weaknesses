@@ -209,8 +209,15 @@
             
             <!-- Charts -->
             <div class="chart-container">
-                <h3 class="chart-title">🔥 Most Searched Pokemon</h3>
+                <h3 class="chart-title">🔍 Most Searched Terms</h3>
                 <ul class="top-list" id="top-searches">
+                    <!-- Will be populated by JavaScript -->
+                </ul>
+            </div>
+            
+            <div class="chart-container">
+                <h3 class="chart-title">🎯 Most Viewed Pokemon</h3>
+                <ul class="top-list" id="top-pokemon-views">
                     <!-- Will be populated by JavaScript -->
                 </ul>
             </div>
@@ -233,6 +240,13 @@
                 <h3 class="chart-title">⏰ Peak Usage Hour</h3>
                 <div class="stat-number" id="peak-hour">00:00</div>
                 <div class="stat-label">Hour with most activity</div>
+            </div>
+            
+            <div class="chart-container">
+                <h3 class="chart-title">📊 Hourly Activity (Last 24 Hours)</h3>
+                <div class="usage-chart" id="hourly-usage">
+                    <!-- Will be populated by JavaScript -->
+                </div>
             </div>
         </div>
     </div>
@@ -261,58 +275,98 @@
         }
         
         function displayAnalytics(data) {
-            // Update overview stats
-            document.getElementById('total-visitors').textContent = data.total_visitors.toLocaleString();
-            document.getElementById('recent-visitors').textContent = data.recent_visitors.toLocaleString();
-            document.getElementById('page-views').textContent = data.total_page_views.toLocaleString();
-            document.getElementById('total-battles').textContent = data.total_battles.toLocaleString();
+            // Update overview stats with safe defaults
+            document.getElementById('total-visitors').textContent = (data.total_visitors || 0).toLocaleString();
+            document.getElementById('recent-visitors').textContent = (data.recent_visitors || 0).toLocaleString();
+            document.getElementById('page-views').textContent = (data.total_page_views || 0).toLocaleString();
+            document.getElementById('total-battles').textContent = (data.total_battles || 0).toLocaleString();
             
             // Update peak hour
-            const peakHour = data.peak_hour[0];
-            const peakCount = data.peak_hour[1];
+            const peakHour = data.peak_hour ? data.peak_hour[0] : "00";
+            const peakCount = data.peak_hour ? data.peak_hour[1] : 0;
             document.getElementById('peak-hour').textContent = `${peakHour}:00 (${peakCount} visits)`;
             
             // Update top searches
             const searchesList = document.getElementById('top-searches');
             searchesList.innerHTML = '';
-            data.top_searches.forEach(([pokemon, count]) => {
-                const li = document.createElement('li');
-                li.innerHTML = `
-                    <span class="pokemon-name">${pokemon}</span>
-                    <span class="count">${count}</span>
-                `;
-                searchesList.appendChild(li);
-            });
+            if (data.top_searches && Array.isArray(data.top_searches)) {
+                data.top_searches.forEach(([term, count]) => {
+                    const li = document.createElement('li');
+                    li.innerHTML = `
+                        <span class="pokemon-name">${term}</span>
+                        <span class="count">${count}</span>
+                    `;
+                    searchesList.appendChild(li);
+                });
+            }
+            
+            // Update top Pokemon views
+            const pokemonViewsList = document.getElementById('top-pokemon-views');
+            pokemonViewsList.innerHTML = '';
+            if (data.top_pokemon_views && Array.isArray(data.top_pokemon_views)) {
+                data.top_pokemon_views.forEach(([pokemon, count]) => {
+                    const li = document.createElement('li');
+                    li.innerHTML = `
+                        <span class="pokemon-name">${pokemon}</span>
+                        <span class="count">${count}</span>
+                    `;
+                    pokemonViewsList.appendChild(li);
+                });
+            }
             
             // Update top leagues
             const leaguesList = document.getElementById('top-leagues');
             leaguesList.innerHTML = '';
-            data.top_leagues.forEach(([league, count]) => {
-                const li = document.createElement('li');
-                li.innerHTML = `
-                    <span class="pokemon-name">${league}</span>
-                    <span class="count">${count}</span>
-                `;
-                leaguesList.appendChild(li);
-            });
+            if (data.top_leagues && Array.isArray(data.top_leagues)) {
+                data.top_leagues.forEach(([league, count]) => {
+                    const li = document.createElement('li');
+                    li.innerHTML = `
+                        <span class="pokemon-name">${league}</span>
+                        <span class="count">${count}</span>
+                    `;
+                    leaguesList.appendChild(li);
+                });
+            }
             
             // Update daily usage chart
             const dailyChart = document.getElementById('daily-usage');
             dailyChart.innerHTML = '';
             
-            const maxUsage = Math.max(...Object.values(data.recent_daily));
-            const sortedDays = Object.entries(data.recent_daily).sort();
+            if (data.recent_daily && Object.keys(data.recent_daily).length > 0) {
+                const maxUsage = Math.max(...Object.values(data.recent_daily));
+                const sortedDays = Object.entries(data.recent_daily).sort();
             
-            sortedDays.forEach(([date, count]) => {
-                const height = maxUsage > 0 ? (count / maxUsage) * 180 : 20;
-                const dayName = new Date(date).toLocaleDateString('en-US', { weekday: 'short' });
+                            sortedDays.forEach(([date, count]) => {
+                    const height = maxUsage > 0 ? (count / maxUsage) * 180 : 20;
+                    const dayName = new Date(date).toLocaleDateString('en-US', { weekday: 'short' });
+                    
+                    const bar = document.createElement('div');
+                    bar.className = 'usage-bar';
+                    bar.style.height = `${height}px`;
+                    bar.innerHTML = `<div class="usage-label">${dayName}</div>`;
+                    dailyChart.appendChild(bar);
+                });
+            }
+            
+            // Update hourly usage chart
+            const hourlyChart = document.getElementById('hourly-usage');
+            hourlyChart.innerHTML = '';
+            
+            if (data.hourly_stats && Object.keys(data.hourly_stats).length > 0) {
+                const maxHourlyVisits = Math.max(...Object.values(data.hourly_stats).map(stats => stats.visits));
+                const sortedHours = Object.entries(data.hourly_stats).sort((a, b) => a[0] - b[0]);
                 
-                const bar = document.createElement('div');
-                bar.className = 'usage-bar';
-                bar.style.height = `${height}px`;
-                bar.innerHTML = `<div class="usage-label">${dayName}</div>`;
-                dailyChart.appendChild(bar);
-            });
+                sortedHours.forEach(([hour, stats]) => {
+                    const height = maxHourlyVisits > 0 ? (stats.visits / maxHourlyVisits) * 180 : 20;
+                    
+                    const bar = document.createElement('div');
+                    bar.className = 'usage-bar';
+                    bar.style.height = `${height}px`;
+                    bar.innerHTML = `<div class="usage-label">${hour}:00</div>`;
+                    bar.title = `${hour}:00 - ${stats.visits} visits, ${stats.pokemon_views} Pokemon views, ${stats.battles} battles`;
+                    hourlyChart.appendChild(bar);
+                });
+            }
             
             document.getElementById('analytics-content').style.display = 'block';
         }

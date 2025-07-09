@@ -160,9 +160,14 @@ def cache_pokemon(name, data):
 @app.route('/')
 def index():
     """Serve the main webpage"""
-    # Track page visit
-    analytics.track_visit(request.remote_addr, request.headers.get('User-Agent', ''))
-    return render_template('index.html')
+    try:
+        # Track page visit
+        analytics.track_visit(request.remote_addr, request.headers.get('User-Agent', ''))
+        return render_template('index.html')
+    except Exception as e:
+        print(f"[ERROR] Exception in index route: {e}")
+        # Still serve the page even if analytics fails
+        return render_template('index.html')
 
 def get_move_effectiveness(move_type, defender_types):
     # Use get_type_effectiveness to get the effectiveness dict for the defender
@@ -283,6 +288,12 @@ def get_pokemon(name):
             cache_pokemon(sanitized_name.lower(), formatted_data)
         except Exception as e:
             print(f"[WARN] Error caching data for {sanitized_name}: {e}")
+
+        # Track Pokemon view in analytics
+        try:
+            analytics.track_pokemon_view(p.get('speciesName', sanitized_name))
+        except Exception as e:
+            print(f"[WARN] Error tracking Pokemon view for {sanitized_name}: {e}")
 
         return jsonify(formatted_data)
 
@@ -974,7 +985,22 @@ def get_analytics():
         stats = analytics.get_stats()
         return jsonify(stats)
     except Exception as e:
-        return jsonify({'error': f'Failed to get analytics: {str(e)}'}), 500
+        print(f"[ERROR] Exception in analytics endpoint: {e}")
+        # Return safe default values instead of error
+        return jsonify({
+            "total_visitors": 0,
+            "recent_visitors": 0,
+            "total_page_views": 0,
+            "total_battles": 0,
+            "top_searches": [],
+            "top_pokemon_views": [],
+            "top_leagues": [],
+            "peak_hour": ["00", 0],
+            "recent_daily": {},
+            "hourly_stats": {},
+            "start_date": datetime.now().isoformat(),
+            "current_concurrent": 0
+        })
 
 ANALYTICS_PASSWORD = os.environ.get("ANALYTICS_PASSWORD", "changeme")
 

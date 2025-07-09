@@ -60,8 +60,11 @@ Thumbs.db
 .env.test.local
 .env.production.local
 
-# Ignore all test scripts and files in the test directory
-/test/
+# Test coverage and cache files (but keep test scripts)
+.pytest_cache/
+.coverage
+coverage.xml
+*.cover
 
 # Security and logs
 security.log
